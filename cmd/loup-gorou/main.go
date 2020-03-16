@@ -41,43 +41,17 @@ func getIPAdress() string {
 
 func init() {
 	lanIPAddress = getIPAdress()
-}
-
-func main() {
 	err := godotenv.Load()
 	if err != nil {
 		panic(err.Error())
 	}
+}
+
+func main() {
 
 	loops, err := strconv.Atoi(os.Getenv("GOROU_EVIO_NUM_LOOPS"))
 	if err != nil {
 		panic(err.Error())
-	}
-
-	msg := &gonest.Event{
-		MessageType: gonest.MessageType_CUPID,
-		Body: &gonest.Event_CupidMessage{
-			CupidMessage: &gonest.CupidMessage{
-				IpAddress1: "12.12.12.12",
-				IpAddress2: "13.13.13.13",
-			},
-		},
-		IpAddress: "127.0.0.1",
-	}
-
-	fmt.Println(msg.String())
-	msg.GetCupidMessage().IpAddress1 = "15.15.15.15"
-	msg.GetCupidMessage().IpAddress2 = "16.16.16.16"
-	msgMarsh, err := proto.Marshal(msg)
-	if err != nil {
-		log.Fatalln("Failed to encode address book:", err)
-	}
-
-	newMsg := &gonest.Event{}
-	if err := proto.Unmarshal([]byte(msgMarsh), newMsg); err != nil {
-		log.Fatalln("Failed to parse address book:", err)
-	} else {
-		fmt.Println(newMsg.String())
 	}
 
 	var events evio.Events
@@ -120,7 +94,7 @@ func main() {
 			message.GetItsHimMessage().RightNodeIpAddress = right.RemoteAddr().String()
 		}
 
-		out, err := proto.Marshal(msg)
+		out, err := proto.Marshal(message)
 		if err != nil {
 			log.Fatalln("Failed to encode message:", err)
 		}
