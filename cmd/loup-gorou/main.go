@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"loupgorou/cmd/loup-gorou/gonest"
 	"net"
@@ -93,6 +95,7 @@ func main() {
 	events.NumLoops = loops
 	events.Serving = func(srv evio.Server) (action evio.Action) {
 		log.Printf("server started: %s", os.Getenv("GOROU_BIND_ADDRESS"))
+		go startPrompt()
 		return
 	}
 	events.Data = func(c evio.Conn, in []byte) (out []byte, action evio.Action) {
@@ -100,6 +103,7 @@ func main() {
 		return
 	}
 	events.Opened = func(ec evio.Conn) (out []byte, opts evio.Options, action evio.Action) {
+
 		fmt.Printf("opened: %v\n", ec.RemoteAddr())
 		if !rightSet {
 			action = evio.Close
@@ -114,7 +118,7 @@ func main() {
 			IpAddress: lanIPAddress,
 		}
 
-		if right.RemoteAddr().String() == "127.0.0.1" {
+		if right == nil || right.RemoteAddr().String() == "127.0.0.1" {
 			message.GetItsHimMessage().RightNodeIpAddress = lanIPAddress
 		} else {
 			message.GetItsHimMessage().RightNodeIpAddress = right.RemoteAddr().String()
@@ -136,6 +140,8 @@ func main() {
 		panic(err.Error())
 	}
 
+}
+func startPrompt() {
 	for !rightSet {
 		fmt.Print("Enter ip adress:port (enter for localhost): ")
 
@@ -148,13 +154,27 @@ func main() {
 		if text == "" {
 			text = os.Getenv("GAROU_DEFAULT_CONNECT_ADDRESS")
 		}
-		fmt.Println("trying to connect to " + text)
+		fmt.Println("Trying to connect to " + text)
+		var err error
+		rightSet = true
 		right, err = net.Dial("tcp", text)
 		if err != nil {
+			rightSet = false
 			log.Println(err)
 		} else {
-			rightSet = true
-			fmt.Println("connection success")
+			fmt.Println("Connection success")
 		}
+	}
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, right)
+	if err != nil {
+		log.Println(err)
+	}
+
+	newMsg := &gonest.Event{}
+	if err := proto.Unmarshal(buf.Bytes(), newMsg); err != nil {
+		log.Fatalln("Failed to parse address book:", err)
+	} else {
+		fmt.Println(newMsg.String())
 	}
 }
