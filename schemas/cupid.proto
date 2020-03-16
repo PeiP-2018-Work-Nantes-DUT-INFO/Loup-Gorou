@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package gonest;
+
+option go_package = "gonest";
+
+message CupidMessage {
+    string ipAddress1 = 1;
+    string ipAddress2 = 2;
+}

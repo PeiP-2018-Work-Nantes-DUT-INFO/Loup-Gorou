@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package gonest;
+
+option go_package = "gonest";
+
+message ClairvoyantMessage {
+    string target = 1;
+    string role = 2;
+}

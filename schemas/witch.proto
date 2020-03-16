@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package gonest;
+
+option go_package = "gonest";
+
+enum WitchAction {
+    NOTHING = 0;
+    HEAL = 1;
+    KILL = 2;
+}
+
+message WitchMessage {
+    WitchAction action = 1;
+    string target = 2;
+}
