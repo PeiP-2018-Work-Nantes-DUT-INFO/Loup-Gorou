@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/firstrow/tcp_server"
 	"github.com/joho/godotenv"
 	"github.com/tidwall/evio"
 )
@@ -34,7 +33,7 @@ func getIPAdress() string {
 		}
 	}
 
-	return "nil"
+	return ""
 }
 
 func main() {
@@ -51,7 +50,7 @@ func main() {
 	var events evio.Events
 
 	switch os.Getenv("GOROU_EVIO_NUM_LOOPS") {
-	case "RANDIM":
+	case "RANDOM":
 		events.LoadBalance = evio.Random
 	case "ROUND-ROBIN":
 		events.LoadBalance = evio.RoundRobin
@@ -69,8 +68,18 @@ func main() {
 	}
 	events.Opened = func(ec evio.Conn) (out []byte, opts evio.Options, action evio.Action) {
 		fmt.Printf("opened: %v\n", ec.RemoteAddr())
-		//ec.SetContext(&conn{})
+		if !rightSet {
+			action = evio.Close
+			return
+		}
+		if right.RemoteAddr().String() == "127.0.0.1" {
+			out = []byte(getIPAdress())
+			return
+		}
+
+		out = []byte(right.RemoteAddr().String())
 		return
+		//ec.SetContext(&conn{})
 	}
 	events.Closed = func(ec evio.Conn, err error) (action evio.Action) {
 		fmt.Printf("closed: %v\n", ec.RemoteAddr())
@@ -80,47 +89,26 @@ func main() {
 		panic(err.Error())
 	}
 
-	server := tcp_server.New(os.Getenv("GAROU_BIND_ADDRESS"))
+	for !rightSet {
+		fmt.Print("Enter ip adress:port (enter for localhost): ")
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter ip adress:port (enter for localhost): ")
-	text, _ := reader.ReadString('\n')
-	text = strings.TrimSuffix(text, "\n")
-	if text == "" {
-		fmt.Println("Local party set at " + getIPAdress())
-	} else {
+		//recuperation de l'adresse IP
+		reader := bufio.NewReader(os.Stdin)
+		text, _ := reader.ReadString('\n')
+		text = strings.TrimSuffix(text, "\n")
+		text = strings.TrimSuffix(text, "\r")
+
+		if text == "" {
+			text = os.Getenv("GAROU_DEFAULT_CONNECT_ADDRESS")
+		}
+		fmt.Println("trying to connect to " + text)
 		right, err = net.Dial("tcp", text)
 		if err != nil {
 			log.Println(err)
 		} else {
-			for {
-				reader := bufio.NewReader(right)
-				message, err := reader.ReadString('\n')
-				if err != nil {
-					log.Println(err)
-				}
-				fmt.Print(message)
-			}
 			rightSet = true
+			fmt.Println("connection success")
 		}
 	}
 
-	server.OnNewClient(func(c *tcp_server.Client) {
-
-		if rightSet == false {
-			c.Send(getIPAdress() + "\n")
-		} else {
-			//on envoie l'adresse ip du membre droit
-		}
-
-	})
-	server.OnNewMessage(func(c *tcp_server.Client, message string) {
-		// new message received
-		fmt.Println(message)
-	})
-	server.OnClientConnectionClosed(func(c *tcp_server.Client, err error) {
-		// connection with client lost
-	})
-
-	server.Listen()
 }
