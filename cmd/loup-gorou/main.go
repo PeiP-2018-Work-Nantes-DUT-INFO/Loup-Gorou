@@ -6,10 +6,12 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/firstrow/tcp_server"
 	"github.com/joho/godotenv"
+	"github.com/tidwall/evio"
 )
 
 var (
@@ -38,7 +40,44 @@ func getIPAdress() string {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		panic(err.Error())
+	}
+
+	loops, err := strconv.Atoi(os.Getenv("GOROU_EVIO_NUM_LOOPS"))
+	if err != nil {
+		panic(err.Error())
+	}
+
+	var events evio.Events
+
+	switch os.Getenv("GOROU_EVIO_NUM_LOOPS") {
+	case "RANDIM":
+		events.LoadBalance = evio.Random
+	case "ROUND-ROBIN":
+		events.LoadBalance = evio.RoundRobin
+	case "LEAST-CONNECTIONS":
+		events.LoadBalance = evio.LeastConnections
+	}
+	events.NumLoops = loops
+	events.Serving = func(srv evio.Server) (action evio.Action) {
+		log.Printf("server started: %s", os.Getenv("GOROU_BIND_ADDRESS"))
+		return
+	}
+	events.Data = func(c evio.Conn, in []byte) (out []byte, action evio.Action) {
+		out = in
+		return
+	}
+	events.Opened = func(ec evio.Conn) (out []byte, opts evio.Options, action evio.Action) {
+		fmt.Printf("opened: %v\n", ec.RemoteAddr())
+		//ec.SetContext(&conn{})
+		return
+	}
+	events.Closed = func(ec evio.Conn, err error) (action evio.Action) {
+		fmt.Printf("closed: %v\n", ec.RemoteAddr())
+		return
+	}
+	if err := evio.Serve(events, os.Getenv("GOROU_BIND_ADDRESS")); err != nil {
+		panic(err.Error())
 	}
 
 	server := tcp_server.New(os.Getenv("GAROU_BIND_ADDRESS"))
