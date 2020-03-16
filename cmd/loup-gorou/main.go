@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	rightSet bool = false
-	right    net.Conn
+	rightSet     bool = false
+	right        net.Conn
+	lanIPAddress string
 )
 
 func getIPAdress() string {
@@ -36,6 +37,10 @@ func getIPAdress() string {
 	}
 
 	return ""
+}
+
+func init() {
+	lanIPAddress = getIPAdress()
 }
 
 func main() {
@@ -100,12 +105,26 @@ func main() {
 			action = evio.Close
 			return
 		}
-		if right.RemoteAddr().String() == "127.0.0.1" {
-			out = []byte(getIPAdress())
-			return
+
+		message := &gonest.Event{
+			MessageType: gonest.MessageType_ITSHIM,
+			Body: &gonest.Event_ItsHimMessage{
+				ItsHimMessage: &gonest.ItsHimMessage{},
+			},
+			IpAddress: lanIPAddress,
 		}
 
-		out = []byte(right.RemoteAddr().String())
+		if right.RemoteAddr().String() == "127.0.0.1" {
+			message.GetItsHimMessage().RightNodeIpAddress = lanIPAddress
+		} else {
+			message.GetItsHimMessage().RightNodeIpAddress = right.RemoteAddr().String()
+		}
+
+		out, err := proto.Marshal(msg)
+		if err != nil {
+			log.Fatalln("Failed to encode message:", err)
+		}
+
 		return
 		//ec.SetContext(&conn{})
 	}
@@ -138,5 +157,4 @@ func main() {
 			fmt.Println("connection success")
 		}
 	}
-
 }

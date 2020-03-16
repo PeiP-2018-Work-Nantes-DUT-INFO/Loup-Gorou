@@ -4,6 +4,6 @@ package gonest;
 
 option go_package = "gonest";
 
-message HelloMessage {
-
+message ItsHimMessage {
+    string rightNodeIpAddress = 1;
 }

@@ -4,7 +4,7 @@ package gonest;
 
 option go_package = "gonest";
 
-import "hello.proto";
+import "itsHim.proto";
 import "ack.proto";
 import "chat.proto";
 import "iplist.proto";
@@ -16,7 +16,7 @@ import "hunter.proto";
 import "clairvoyant.proto";
 
 enum MessageType {
-    HELLO        = 0;
+    ITSHIM       = 0;
     ACK          = 1;
     CHAT         = 2;
     IPLIST       = 3;
@@ -31,7 +31,7 @@ enum MessageType {
 message Event {
     MessageType messageType = 1;
     oneof body {
-        HelloMessage        helloMessage = 2;
+        ItsHimMessage       itsHimMessage = 2;
         AckMessage          ackMessage   = 3;
         ChatMessage         chatMessage = 4;
         IpListMessage       ipListMessage = 5;
