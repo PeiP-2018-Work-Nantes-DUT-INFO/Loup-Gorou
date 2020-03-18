@@ -3,18 +3,15 @@ package main
 import (
 	"bufio"
 	b64 "encoding/base64"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"loupgorou/cmd/loup-gorou/gonest"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 
+	"github.com/firstrow/tcp_server"
 	"github.com/joho/godotenv"
-	"github.com/smallnest/goframe"
-	"github.com/tidwall/evio"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -22,20 +19,7 @@ var (
 	rightSet     bool = false
 	right        net.Conn
 	lanIPAddress string
-
-	encoderConfig = goframe.EncoderConfig{
-		ByteOrder:                       binary.BigEndian,
-		LengthFieldLength:               4,
-		LengthAdjustment:                0,
-		LengthIncludesLengthFieldLength: false,
-	}
-	decoderConfig = goframe.DecoderConfig{
-		ByteOrder:           binary.BigEndian,
-		LengthFieldOffset:   0,
-		LengthFieldLength:   4,
-		LengthAdjustment:    0,
-		InitialBytesToStrip: 4,
-	}
+	isLocalhost  bool = true
 )
 
 func getIPAdress() string {
@@ -66,39 +50,16 @@ func init() {
 
 func main() {
 
-	loops, err := strconv.Atoi(os.Getenv("GOROU_EVIO_NUM_LOOPS"))
-	if err != nil {
-		panic(err.Error())
-	}
+	server := tcp_server.New(fmt.Sprintf("%s:%s",
+		os.Getenv("GOROU_BIND_ADDRESS"),
+		os.Getenv("GOROU_BIND_PORT")))
 
-	var events evio.Events
-
-	switch os.Getenv("GOROU_EVIO_NUM_LOOPS") {
-	case "RANDOM":
-		events.LoadBalance = evio.Random
-	case "ROUND-ROBIN":
-		events.LoadBalance = evio.RoundRobin
-	case "LEAST-CONNECTIONS":
-		events.LoadBalance = evio.LeastConnections
-	}
-	events.NumLoops = loops
-	events.Serving = func(srv evio.Server) (action evio.Action) {
-		log.Printf("server started: %s", os.Getenv("GOROU_BIND_ADDRESS"))
-		go startConnection()
-		return
-	}
-	events.Data = func(c evio.Conn, in []byte) (out []byte, action evio.Action) {
-		out = in
-		return
-	}
-	events.Opened = func(ec evio.Conn) (out []byte, opts evio.Options, action evio.Action) {
-
-		fmt.Printf("opened: %v\n", ec.RemoteAddr())
-		if !rightSet {
-			action = evio.Close
-			return
-		}
-		ec.SetContext(&evio.InputStream{})
+	server.OnNewMessage(func(c *tcp_server.Client, message string) {
+		fmt.Println("Message:", message)
+		// new message received
+	})
+	server.OnNewClient(func(c *tcp_server.Client) {
+		fmt.Printf("opened: %v\n", c.Conn().RemoteAddr().String())
 		message := &gonest.Event{
 			MessageType: gonest.MessageType_ITSHIM,
 			Body: &gonest.Event_ItsHimMessage{
@@ -106,30 +67,39 @@ func main() {
 			},
 			IpAddress: lanIPAddress,
 		}
-
 		if right == nil || strings.Split(right.RemoteAddr().String(), ":")[0] == "127.0.0.1" {
-			message.GetItsHimMessage().RightNodeIpAddress = lanIPAddress
+			message.GetItsHimMessage().RightNodeIpAddress = lanIPAddress + ":" + os.Getenv("GOROU_BIND_PORT")
 		} else {
 			message.GetItsHimMessage().RightNodeIpAddress = right.RemoteAddr().String()
 		}
 
+		if !isLocalhost {
+			right.Close()
+			fmt.Println("Connecting")
+			var err error
+			host, _, _ := net.SplitHostPort(c.Conn().RemoteAddr().String())
+			right, err = net.Dial(c.Conn().RemoteAddr().Network(), "["+host+"]:5000")
+			if err != nil {
+				panic(err.Error())
+			}
+		} else {
+			isLocalhost = false
+		}
 		out, err := proto.Marshal(message)
 		if err != nil {
 			log.Fatalln("Failed to encode message:", err)
 		}
-		out = ([]byte)(b64.StdEncoding.EncodeToString(out) + "\n")
-
-		return
-		//ec.SetContext(&conn{})
-	}
-	events.Closed = func(ec evio.Conn, err error) (action evio.Action) {
-		fmt.Printf("closed: %v\n", ec.RemoteAddr())
-		return
-	}
-	if err := evio.Serve(events, os.Getenv("GOROU_BIND_ADDRESS")); err != nil {
-		panic(err.Error())
-	}
-
+		err = c.Send(b64.StdEncoding.EncodeToString(out) + "\n")
+		if err != nil {
+			panic(err.Error())
+		}
+	})
+	server.OnClientConnectionClosed(func(c *tcp_server.Client, err error) {
+		fmt.Printf("closed: %v\n", c.Conn().RemoteAddr().String())
+		// connection with client lost
+	})
+	go startConnection()
+	server.Listen()
 }
 
 func startConnection() {
@@ -157,19 +127,31 @@ func startConnection() {
 		}
 	}
 
-	reader := bufio.NewReader(right)
-	str, err := reader.ReadString('\n')
-	if err != nil {
-		panic(err.Error())
-	}
-	buf, err := b64.StdEncoding.DecodeString(str)
-	if err != nil {
-		panic(err.Error())
-	}
-	newMsg := &gonest.Event{}
-	if err := proto.Unmarshal(buf, newMsg); err != nil {
-		log.Fatalln("Failed to parse address book:", err)
-	} else {
-		fmt.Println(newMsg.String())
+	//New client part
+	if right.RemoteAddr().String() != "[::1]:"+os.Getenv("GOROU_BIND_PORT") {
+		isLocalhost = false
+		reader := bufio.NewReader(right)
+		str, err := reader.ReadString('\n')
+		if err != nil {
+			panic(err.Error())
+		}
+		buf, err := b64.StdEncoding.DecodeString(str)
+		if err != nil {
+			panic(err.Error())
+		}
+		newMsg := &gonest.Event{}
+		if err := proto.Unmarshal(buf, newMsg); err != nil {
+			panic(err.Error())
+		} else {
+			fmt.Println(newMsg.String())
+		}
+		right.Close()
+		right, err = net.Dial("tcp", newMsg.GetItsHimMessage().GetRightNodeIpAddress())
+		if err != nil {
+			panic(err.Error())
+		}
+		writer := bufio.NewWriter(right)
+		writer.WriteString("Test")
+		writer.Flush()
 	}
 }

@@ -5,6 +5,7 @@ package gonest;
 option go_package = "gonest";
 
 import "itsHim.proto";
+import "hello.proto";
 import "ack.proto";
 import "chat.proto";
 import "iplist.proto";
@@ -26,6 +27,7 @@ enum MessageType {
     CUPID        = 7;
     HUNTER       = 8;
     CLAIRVOYANT  = 9;
+    HELLO        = 10;
 }
 
 message Event {
@@ -41,6 +43,7 @@ message Event {
         CupidMessage        cupidMessage = 9;
         HunterMessage       hunterMessage = 10;
         ClairvoyantMessage  clairvoyantMessage = 11;
+        HelloMessage        helloMessage = 13;
     }
     string ipAddress = 12;
 }
