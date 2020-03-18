@@ -2,9 +2,9 @@ package main
 
 import (
 	"bufio"
-	"bytes"
+	b64 "encoding/base64"
+	"encoding/binary"
 	"fmt"
-	"io"
 	"log"
 	"loupgorou/cmd/loup-gorou/gonest"
 	"net"
@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
+	"github.com/smallnest/goframe"
 	"github.com/tidwall/evio"
 	"google.golang.org/protobuf/proto"
 )
@@ -21,6 +22,20 @@ var (
 	rightSet     bool = false
 	right        net.Conn
 	lanIPAddress string
+
+	encoderConfig = goframe.EncoderConfig{
+		ByteOrder:                       binary.BigEndian,
+		LengthFieldLength:               4,
+		LengthAdjustment:                0,
+		LengthIncludesLengthFieldLength: false,
+	}
+	decoderConfig = goframe.DecoderConfig{
+		ByteOrder:           binary.BigEndian,
+		LengthFieldOffset:   0,
+		LengthFieldLength:   4,
+		LengthAdjustment:    0,
+		InitialBytesToStrip: 4,
+	}
 )
 
 func getIPAdress() string {
@@ -69,7 +84,7 @@ func main() {
 	events.NumLoops = loops
 	events.Serving = func(srv evio.Server) (action evio.Action) {
 		log.Printf("server started: %s", os.Getenv("GOROU_BIND_ADDRESS"))
-		go startPrompt()
+		go startConnection()
 		return
 	}
 	events.Data = func(c evio.Conn, in []byte) (out []byte, action evio.Action) {
@@ -83,7 +98,7 @@ func main() {
 			action = evio.Close
 			return
 		}
-
+		ec.SetContext(&evio.InputStream{})
 		message := &gonest.Event{
 			MessageType: gonest.MessageType_ITSHIM,
 			Body: &gonest.Event_ItsHimMessage{
@@ -92,7 +107,7 @@ func main() {
 			IpAddress: lanIPAddress,
 		}
 
-		if right == nil || right.RemoteAddr().String() == "127.0.0.1" {
+		if right == nil || strings.Split(right.RemoteAddr().String(), ":")[0] == "127.0.0.1" {
 			message.GetItsHimMessage().RightNodeIpAddress = lanIPAddress
 		} else {
 			message.GetItsHimMessage().RightNodeIpAddress = right.RemoteAddr().String()
@@ -102,6 +117,7 @@ func main() {
 		if err != nil {
 			log.Fatalln("Failed to encode message:", err)
 		}
+		out = ([]byte)(b64.StdEncoding.EncodeToString(out) + "\n")
 
 		return
 		//ec.SetContext(&conn{})
@@ -115,7 +131,8 @@ func main() {
 	}
 
 }
-func startPrompt() {
+
+func startConnection() {
 	for !rightSet {
 		fmt.Print("Enter ip adress:port (enter for localhost): ")
 
@@ -139,14 +156,18 @@ func startPrompt() {
 			fmt.Println("Connection success")
 		}
 	}
-	var buf bytes.Buffer
-	_, err := io.Copy(&buf, right)
-	if err != nil {
-		log.Println(err)
-	}
 
+	reader := bufio.NewReader(right)
+	str, err := reader.ReadString('\n')
+	if err != nil {
+		panic(err.Error())
+	}
+	buf, err := b64.StdEncoding.DecodeString(str)
+	if err != nil {
+		panic(err.Error())
+	}
 	newMsg := &gonest.Event{}
-	if err := proto.Unmarshal(buf.Bytes(), newMsg); err != nil {
+	if err := proto.Unmarshal(buf, newMsg); err != nil {
 		log.Fatalln("Failed to parse address book:", err)
 	} else {
 		fmt.Println(newMsg.String())
