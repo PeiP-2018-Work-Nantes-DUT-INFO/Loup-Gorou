@@ -2,24 +2,25 @@ package main
 
 import (
 	"bufio"
-	b64 "encoding/base64"
 	"fmt"
 	"log"
+	"loupgorou/cmd/loup-gorou/frame"
 	"loupgorou/cmd/loup-gorou/gonest"
 	"net"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/firstrow/tcp_server"
 	"github.com/joho/godotenv"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
 	rightSet     bool = false
 	right        net.Conn
 	lanIPAddress string
-	isLocalhost  bool = true
+	rightMutex   *sync.Mutex = &sync.Mutex{}
 )
 
 func getIPAdress() string {
@@ -41,57 +42,66 @@ func getIPAdress() string {
 }
 
 func init() {
-	lanIPAddress = getIPAdress()
 	err := godotenv.Load()
 	if err != nil {
 		panic(err.Error())
 	}
+	lanIPAddress = getIPAdress() + ":" + os.Getenv("GOROU_BIND_PORT")
 }
 
 func main() {
-
 	server := tcp_server.New(fmt.Sprintf("%s:%s",
 		os.Getenv("GOROU_BIND_ADDRESS"),
 		os.Getenv("GOROU_BIND_PORT")))
 
 	server.OnNewMessage(func(c *tcp_server.Client, message string) {
-		fmt.Println("Message:", message)
 		// new message received
-	})
-	server.OnNewClient(func(c *tcp_server.Client) {
-		fmt.Printf("opened: %v\n", c.Conn().RemoteAddr().String())
-		message := &gonest.Event{
-			MessageType: gonest.MessageType_ITSHIM,
-			Body: &gonest.Event_ItsHimMessage{
-				ItsHimMessage: &gonest.ItsHimMessage{},
-			},
-			IpAddress: lanIPAddress,
-		}
-		if right == nil || strings.Split(right.RemoteAddr().String(), ":")[0] == "127.0.0.1" {
-			message.GetItsHimMessage().RightNodeIpAddress = lanIPAddress + ":" + os.Getenv("GOROU_BIND_PORT")
+		event, err := frame.DecodeEventB64(strings.TrimSuffix(message, "\n"))
+		if err != nil {
+			panic(err.Error())
 		} else {
-			message.GetItsHimMessage().RightNodeIpAddress = right.RemoteAddr().String()
+			fmt.Println("Received message", event.String())
 		}
-
-		if !isLocalhost {
-			right.Close()
-			fmt.Println("Connecting")
-			var err error
-			host, _, _ := net.SplitHostPort(c.Conn().RemoteAddr().String())
-			right, err = net.Dial(c.Conn().RemoteAddr().Network(), "["+host+"]:5000")
+		switch event.GetMessageType() {
+		case gonest.MessageType_HELLO:
+			hello(c, event)
+			/* tests */
+			rightMutex.Lock()
+			event := gonest.AckMessageFactory(lanIPAddress)
+			writer := bufio.NewWriter(right)
+			encoded, _ := frame.EncodeEventB64(event)
+			_, err := writer.WriteString(encoded)
 			if err != nil {
 				panic(err.Error())
 			}
-		} else {
-			isLocalhost = false
+			err = writer.Flush()
+			if err != nil {
+				panic(err.Error())
+			}
+			rightMutex.Unlock()
+
+		case gonest.MessageType_ACK:
+			rightMutex.Lock()
+			time.Sleep(1 * time.Second)
+			writer := bufio.NewWriter(right)
+			event.IpAddress = lanIPAddress
+			encoded, _ := frame.EncodeEventB64(event)
+			_, err := writer.WriteString(encoded)
+			if err != nil {
+				panic(err.Error())
+			}
+			err = writer.Flush()
+			if err != nil {
+				panic(err.Error())
+			}
+			rightMutex.Unlock()
+
 		}
-		out, err := proto.Marshal(message)
-		if err != nil {
-			log.Fatalln("Failed to encode message:", err)
-		}
-		err = c.Send(b64.StdEncoding.EncodeToString(out) + "\n")
-		if err != nil {
-			panic(err.Error())
+	})
+	server.OnNewClient(func(c *tcp_server.Client) {
+		fmt.Printf("opened: %v\n", c.Conn().RemoteAddr().String())
+		if !rightSet {
+			c.Close()
 		}
 	})
 	server.OnClientConnectionClosed(func(c *tcp_server.Client, err error) {
@@ -100,8 +110,37 @@ func main() {
 	})
 	go startConnection()
 	server.Listen()
+
 }
 
+func hello(c *tcp_server.Client, event *gonest.Event) {
+	message := gonest.ItsHimMessageFactory(lanIPAddress)
+	if right == nil || strings.Split(right.RemoteAddr().String(), ":")[0] == "127.0.0.1" {
+		message.GetItsHimMessage().RightNodeIpAddress = lanIPAddress + ":" + os.Getenv("GOROU_BIND_PORT")
+	} else {
+		message.GetItsHimMessage().RightNodeIpAddress = right.RemoteAddr().String()
+	}
+	rightMutex.Lock()
+	err := right.Close()
+	if err != nil {
+		panic(err.Error())
+	}
+	fmt.Println("Connecting")
+	right, err = net.Dial(c.Conn().RemoteAddr().Network(), event.GetIpAddress())
+	if err != nil {
+		panic(err.Error())
+	}
+	rightMutex.Unlock()
+
+	encoded, err := frame.EncodeEventB64(message)
+	if err != nil {
+		log.Fatalln("Failed to encode message:", err)
+	}
+	err = c.Send(encoded)
+	if err != nil {
+		panic(err.Error())
+	}
+}
 func startConnection() {
 	for !rightSet {
 		fmt.Print("Enter ip adress:port (enter for localhost): ")
@@ -129,29 +168,39 @@ func startConnection() {
 
 	//New client part
 	if right.RemoteAddr().String() != "[::1]:"+os.Getenv("GOROU_BIND_PORT") {
-		isLocalhost = false
+		rightMutex.Lock()
+
+		event := gonest.HelloMessageFactory(lanIPAddress)
+		writer := bufio.NewWriter(right)
+		encoded, _ := frame.EncodeEventB64(event)
+		_, err := writer.WriteString(encoded)
+		if err != nil {
+			panic(err.Error())
+		}
+		writer.Flush()
 		reader := bufio.NewReader(right)
 		str, err := reader.ReadString('\n')
 		if err != nil {
 			panic(err.Error())
 		}
-		buf, err := b64.StdEncoding.DecodeString(str)
+		newMsg, err := frame.DecodeEventB64(str)
 		if err != nil {
-			panic(err.Error())
-		}
-		newMsg := &gonest.Event{}
-		if err := proto.Unmarshal(buf, newMsg); err != nil {
 			panic(err.Error())
 		} else {
 			fmt.Println(newMsg.String())
 		}
+		fmt.Println("Now setting right peer to", newMsg.GetItsHimMessage().GetRightNodeIpAddress())
+		err = right.Close()
+		if err != nil {
+			panic(err.Error())
+		}
 		right.Close()
+		right = nil
 		right, err = net.Dial("tcp", newMsg.GetItsHimMessage().GetRightNodeIpAddress())
 		if err != nil {
 			panic(err.Error())
 		}
-		writer := bufio.NewWriter(right)
-		writer.WriteString("Test")
-		writer.Flush()
+		rightMutex.Unlock()
+
 	}
 }
