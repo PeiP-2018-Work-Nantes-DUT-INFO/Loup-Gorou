@@ -45,5 +45,5 @@ message Event {
         ClairvoyantMessage  clairvoyantMessage = 11;
         HelloMessage        helloMessage = 13;
     }
-    string ipAddress = 12;
+    string source = 12;
 }

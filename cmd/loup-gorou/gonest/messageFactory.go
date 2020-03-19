@@ -6,7 +6,7 @@ func AckMessageFactory(source string) *Event {
 		Body: &Event_AckMessage{
 			AckMessage: &AckMessage{},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -18,7 +18,7 @@ func ChatMessageFactory(source, message string) *Event {
 				Content: message,
 			},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -30,7 +30,7 @@ func ClairvoyantMessageFactory(source, target string) *Event {
 				Target: target,
 			},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -43,7 +43,7 @@ func CupidMessageFactory(source, target1, target2 string) *Event {
 				IpAddress2: target2,
 			},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -53,7 +53,7 @@ func HelloMessageFactory(source string) *Event {
 		Body: &Event_HelloMessage{
 			HelloMessage: &HelloMessage{},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -65,7 +65,7 @@ func HumanVoteMessageFactory(source, target string) *Event {
 				Target: target,
 			},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -77,7 +77,7 @@ func HunterMessageFactory(source, target string) *Event {
 				Target: target,
 			},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -91,7 +91,7 @@ func IpListMessageFactory(source, ipAdress string) *Event {
 				IpAdress: ipAdressList,
 			},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -101,7 +101,7 @@ func ItsHimMessageFactory(source string) *Event {
 		Body: &Event_ItsHimMessage{
 			ItsHimMessage: &ItsHimMessage{},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -113,7 +113,7 @@ func WerewolfVoteMessageFactory(source, target string) *Event {
 				Target: target,
 			},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
 
@@ -126,6 +126,6 @@ func WitchMessageFactory(source, target string, action WitchAction) *Event {
 				Target: target,
 			},
 		},
-		IpAddress: source,
+		Source: source,
 	}
 }
