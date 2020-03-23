@@ -17,15 +17,17 @@ import (
 )
 
 var (
-	rightSet          bool = false
-	right             net.Conn
-	lanIPAddress      string
-	preparationPhase              = true  //création de l'anneau, jusqu'a ce que la partie commence
-	completationPhase             = false //lorsque le nombre minimal de personne pour une partie est present dans le réseau, lance un décompte de 20sec avant le debut de la partie
-	rightMutex        *sync.Mutex = &sync.Mutex{}
-	listIPAddess                  = make([]string, 10)
-	minPlayer                     = 3
-	ackList           []bool
+	rightSet            bool = false
+	right               net.Conn
+	lanIPAddress        string
+	preparationPhase                = true  //création de l'anneau, jusqu'a ce que la partie commence
+	completationPhase               = false //lorsque le nombre minimal de personne pour une partie est present dans le réseau, lance un décompte de 20sec avant le debut de la partie
+	rightMutex          *sync.Mutex = &sync.Mutex{}
+	listIPAddess                    = make([]string, 10)
+	minPlayer                       = 3
+	ackList             []bool
+	timerEndPreparation *time.Timer = time.NewTimer(1 * time.Hour)
+	broadcastChannel                = make(chan gonest.MessageType)
 )
 
 func getIPAdress() string {
@@ -68,43 +70,12 @@ func main() {
 		if err != nil {
 			panic(err.Error())
 		} else {
-			fmt.Println("Received message", event.String())
+			//fmt.Println("Received message", event.String())
 		}
-
 		if event.GetSource() != lanIPAddress {
-			//rightMutex.Lock()
-			switch event.GetMessageType() {
-			case gonest.MessageType_HELLO:
-				hello(c, event)
-				/* tests */
-				/* event := gonest.AckMessageFactory(lanIPAddress)
-				writer := bufio.NewWriter(right)
-				encoded, _ := frame.EncodeEventB64(event)
-				_, err := writer.WriteString(encoded)
-				if err != nil {
-					panic(err.Error())
-				}
-				err = writer.Flush()
-				if err != nil {
-					panic(err.Error())
-				} */
-
-			case gonest.MessageType_ACK:
-				ackHandler()
-			case gonest.MessageType_IPLIST:
-				ipListHandler(c, event)
-			}
-			//rightMutex.Unlock()
+			broadcastInProgress(c, message, event)
 		} else {
-			switch event.GetMessageType() {
-			case gonest.MessageType_IPLIST:
-				listIPAddess = event.GetIpListMessage().IpAdress
-				fmt.Println("actual ip list :", listIPAddess)
-				if !preparationPhase {
-					ackList = make([]bool, len(listIPAddess))
-					sendACK()
-				}
-			}
+			broadcastDone(message, event)
 		}
 
 	})
@@ -119,8 +90,47 @@ func main() {
 		// connection with client lost
 	})
 	go startConnection()
+	go lookInBroadcastChannel()
 	server.Listen()
 
+}
+
+func broadcastInProgress(c *tcp_server.Client, message string, event *gonest.Event) {
+	switch event.GetMessageType() {
+	case gonest.MessageType_HELLO:
+		hello(c, event)
+	case gonest.MessageType_ACK:
+		ackHandler()
+	case gonest.MessageType_IPLIST:
+		ipListHandler(event)
+	}
+	fmt.Println("propagate:", event.String())
+}
+
+func broadcastDone(message string, event *gonest.Event) {
+	fmt.Println("return to me:", event.String())
+	switch event.GetMessageType() {
+	case gonest.MessageType_IPLIST:
+		listIPAddess = event.GetIpListMessage().IpAdress
+		fmt.Println("actual ip list :", listIPAddess)
+		if len(listIPAddess) >= minPlayer && preparationPhase && !completationPhase {
+			timerEndPreparation = time.NewTimer(20 * time.Second)
+			completationPhase = true // debut de la phase de completation
+			fmt.Println("------------------------------\n------------------------------\ndebut completation phase\n------------------------------\n------------------------------")
+		}
+		if !preparationPhase {
+			ackList = make([]bool, len(listIPAddess))
+			sendACK()
+		}
+	}
+	broadcastChannel <- event.GetMessageType()
+}
+
+func lookInBroadcastChannel() {
+	for {
+		//broadcastType := <-broadcastChannel
+		<-broadcastChannel
+	}
 }
 
 func hello(c *tcp_server.Client, event *gonest.Event) {
@@ -152,23 +162,10 @@ func hello(c *tcp_server.Client, event *gonest.Event) {
 	}
 }
 
-func ipListHandler(c *tcp_server.Client, event *gonest.Event) {
+func ipListHandler(event *gonest.Event) {
 	event.GetIpListMessage().IpAdress = append(event.GetIpListMessage().IpAdress, lanIPAddress)
-	//fmt.Println(event.String())
-	encoded, err := frame.EncodeEventB64(event)
-	if err != nil {
-		panic(err.Error())
-	}
-	writer := bufio.NewWriter(right)
-	_, err = writer.WriteString(encoded)
-	if err != nil {
-		panic(err.Error())
-	}
-	err = writer.Flush()
-	if err != nil {
-		panic(err.Error())
-	}
-	fmt.Println("flush done")
+	eventPropagator(event, right)
+
 }
 
 func startConnection() {
@@ -238,25 +235,18 @@ func startConnection() {
 
 func timerFunction() {
 	tickerIPList := time.NewTicker(5 * time.Second)
-	tickerCountMembers := time.NewTicker(1 * time.Second)
-	timerEndPreparation := time.NewTimer(1 * time.Hour)
-
 	for {
 		select {
 		case <-tickerIPList.C:
 			if preparationPhase {
 				sendIPList()
 			}
-		case <-tickerCountMembers.C:
-			if len(listIPAddess) > minPlayer && preparationPhase && !completationPhase {
-				timerEndPreparation = time.NewTimer(20 * time.Second)
-				completationPhase = true // debut de la phase de completation
-			}
 		case <-timerEndPreparation.C:
 			if completationPhase {
 				completationPhase = false // fin de la pahse de completation
 				preparationPhase = false  // fin de la phase de preparation
 				sendIPList()
+				fmt.Println("preparation fini !")
 			}
 		}
 	}
@@ -264,32 +254,28 @@ func timerFunction() {
 
 func sendACK() {
 	event := gonest.AckMessageFactory(lanIPAddress)
-	encoded, _ := frame.EncodeEventB64(event)
-	rightMutex.Lock()
-	writer := bufio.NewWriter(right)
-	rightMutex.Unlock()
-	_, err := writer.WriteString(encoded)
-	if err != nil {
-		panic(err.Error())
-	}
-	writer.Flush()
+	eventPropagator(event, right)
 }
 
 func sendIPList() {
 	event := gonest.IpListMessageFactory(lanIPAddress, lanIPAddress)
-	encoded, _ := frame.EncodeEventB64(event)
-	rightMutex.Lock()
-	writer := bufio.NewWriter(right)
-	rightMutex.Unlock()
-	_, err := writer.WriteString(encoded)
-	if err != nil {
-		panic(err.Error())
-	}
-	writer.Flush()
+	eventPropagator(event, right)
 }
 
 func ackHandler() {
 	if ackList == nil {
 		ackList = make([]bool, len(listIPAddess))
 	}
+}
+
+func eventPropagator(event *gonest.Event, right net.Conn) {
+	encoded, _ := frame.EncodeEventB64(event)
+	rightMutex.Lock()
+	writer := bufio.NewWriter(right)
+	rightMutex.Unlock()
+	_, err := writer.WriteString(encoded)
+	if err != nil {
+		panic(err.Error())
+	}
+	writer.Flush()
 }
