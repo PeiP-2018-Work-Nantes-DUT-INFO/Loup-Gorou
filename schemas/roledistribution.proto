@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package gonest;
+
+option go_package = "gonest";
+
+enum Role {
+    HUMANROLE       = 0;
+    WEREWOLFROLE    = 1;
+    WITCHROLE       = 2;
+    CUPIDROLE       = 3;
+    HUNTERROLE      = 4;
+    CLAIRVOYANTROLE = 5;
+}
+
+message RoleDistributionMessage {
+    string target = 1;
+    Role   role   = 2;
+}

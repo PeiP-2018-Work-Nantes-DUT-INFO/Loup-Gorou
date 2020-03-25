@@ -15,35 +15,41 @@ import "witch.proto";
 import "cupid.proto";
 import "hunter.proto";
 import "clairvoyant.proto";
+import "leaderelection.proto";
+import "roledistribution.proto";
 
 enum MessageType {
-    ITSHIM       = 0;
-    ACK          = 1;
-    CHAT         = 2;
-    IPLIST       = 3;
-    HUMANVOTE    = 4;
-    WEREWOLFVOTE = 5;
-    WITCH        = 6;
-    CUPID        = 7;
-    HUNTER       = 8;
-    CLAIRVOYANT  = 9;
-    HELLO        = 10;
+    ITSHIM           = 0;
+    ACK              = 1;
+    CHAT             = 2;
+    IPLIST           = 3;
+    HUMANVOTE        = 4;
+    WEREWOLFVOTE     = 5;
+    WITCH            = 6;
+    CUPID            = 7;
+    HUNTER           = 8;
+    CLAIRVOYANT      = 9;
+    HELLO            = 10;
+    LEADERELECTION   = 11;
+    ROLEDISTRIBUTION = 12;
 }
 
 message Event {
     MessageType messageType = 1;
     oneof body {
-        ItsHimMessage       itsHimMessage = 2;
-        AckMessage          ackMessage   = 3;
-        ChatMessage         chatMessage = 4;
-        IpListMessage       ipListMessage = 5;
-        HumanVoteMessage    humanVoteMessage = 6;
-        WerewolfVoteMessage werwolfVoteMessage = 7;
-        WitchMessage        witchMessage = 8;
-        CupidMessage        cupidMessage = 9;
-        HunterMessage       hunterMessage = 10;
-        ClairvoyantMessage  clairvoyantMessage = 11;
-        HelloMessage        helloMessage = 13;
+        AckMessage              ackMessage              = 3;
+        ItsHimMessage           itsHimMessage           = 2;
+        ChatMessage             chatMessage             = 4;
+        IpListMessage           ipListMessage           = 5;
+        HumanVoteMessage        humanVoteMessage        = 6;
+        WerewolfVoteMessage     werwolfVoteMessage      = 7;
+        WitchMessage            witchMessage            = 8;
+        CupidMessage            cupidMessage            = 9;
+        HunterMessage           hunterMessage           = 10;
+        ClairvoyantMessage      clairvoyantMessage      = 11;
+        HelloMessage            helloMessage            = 13;
+        LeaderElectionMessage   leaderElectionMessage   = 14;
+        RoleDistributionMessage roleDistributionMessage = 15;
     }
     string source = 12;
 }
