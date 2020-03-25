@@ -16,6 +16,7 @@ import "hunter.proto";
 import "clairvoyant.proto";
 import "leaderelection.proto";
 import "roledistribution.proto";
+import "dead.proto";
 
 enum MessageType {
     ITSHIM           = 0;
@@ -30,6 +31,7 @@ enum MessageType {
     HELLO            = 9;
     LEADERELECTION   = 10;
     ROLEDISTRIBUTION = 11;
+    DEAD             = 12;
 }
 
 message Event {
@@ -47,6 +49,7 @@ message Event {
         HelloMessage            helloMessage            = 13;
         LeaderElectionMessage   leaderElectionMessage   = 14;
         RoleDistributionMessage roleDistributionMessage = 15;
+        DeadMessage             deadMessage             = 16;
     }
     string source = 12;
 }
