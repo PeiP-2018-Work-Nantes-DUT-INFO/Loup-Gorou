@@ -4,6 +4,6 @@ package gonest;
 
 option go_package = "gonest";
 
-message WerewolfVoteMessage {
+message VoteMessage {
     string target = 1;
 }

@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package gonest;
-
-option go_package = "gonest";
-
-message HumanVoteMessage {
-    string target = 1;
-}
