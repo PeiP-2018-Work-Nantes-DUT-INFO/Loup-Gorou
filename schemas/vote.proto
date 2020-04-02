@@ -4,6 +4,7 @@ package gonest;
 
 option go_package = "gonest";
 
+//Message utilisé pour voté pour quelqu'un.
 message VoteMessage {
     string target = 1;
 }

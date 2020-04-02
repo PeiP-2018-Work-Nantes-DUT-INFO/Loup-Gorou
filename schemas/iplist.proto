@@ -4,6 +4,9 @@ package gonest;
 
 option go_package = "gonest";
 
+//Message permettant de collecter l'adresse ip de chaque personne dans l'anneau.
+//Chaque personne recevant ce message va y ajouter son adresse ip et renvoyer le message à son membre de droie dans l'anneau.
 message IpListMessage {
+    //repeated désigne un champ répetable à l'infini.
     repeated string ipAdress = 1;
 }

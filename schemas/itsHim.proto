@@ -4,6 +4,8 @@ package gonest;
 
 option go_package = "gonest";
 
+//Message recu lorsque l'on demande de rentrer dans l'anneau.
+//"rightNodeIpAddress" désigne la personne a qui on doit ouvrir une connection pour renteer dans l'anneau.
 message ItsHimMessage {
     string rightNodeIpAddress = 1;
 }

@@ -6,6 +6,7 @@ option go_package = "gonest";
 
 import "roledistribution.proto";
 
+//Message envoyé lorsqu'un joueur meurt, il va y envoyé son rôle pour que tout le monde le connaisse.
 message DeadMessage {
     Role role = 1;
 }

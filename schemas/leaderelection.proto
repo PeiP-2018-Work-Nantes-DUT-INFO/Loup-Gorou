@@ -4,6 +4,7 @@ package gonest;
 
 option go_package = "gonest";
 
+//Message envoyé par le leader, pour assurer que tout le monde est le meme leader.
 message LeaderElectionMessage {
     string leader = 1;
 }

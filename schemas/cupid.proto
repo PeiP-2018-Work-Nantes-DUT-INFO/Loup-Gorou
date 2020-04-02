@@ -4,6 +4,7 @@ package gonest;
 
 option go_package = "gonest";
 
+//Designe les 2 cibles de cupidon.
 message CupidMessage {
     string ipAddress1 = 1;
     string ipAddress2 = 2;

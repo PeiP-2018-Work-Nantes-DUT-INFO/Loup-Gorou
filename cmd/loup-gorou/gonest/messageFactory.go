@@ -57,18 +57,6 @@ func HelloMessageFactory(source string) *Event {
 	}
 }
 
-func HumanVoteMessageFactory(source, target string) *Event {
-	return &Event{
-		MessageType: MessageType_HUMANVOTE,
-		Body: &Event_HumanVoteMessage{
-			HumanVoteMessage: &HumanVoteMessage{
-				Target: target,
-			},
-		},
-		Source: source,
-	}
-}
-
 func HunterMessageFactory(source, target string) *Event {
 	return &Event{
 		MessageType: MessageType_HUNTER,
@@ -105,11 +93,36 @@ func ItsHimMessageFactory(source string) *Event {
 	}
 }
 
-func WerewolfVoteMessageFactory(source, target string) *Event {
+func LeaderElectionMessageFactory(source, leader string) *Event {
 	return &Event{
-		MessageType: MessageType_WEREWOLFVOTE,
-		Body: &Event_WerwolfVoteMessage{
-			WerwolfVoteMessage: &WerewolfVoteMessage{
+		MessageType: MessageType_LEADERELECTION,
+		Body: &Event_LeaderElectionMessage{
+			LeaderElectionMessage: &LeaderElectionMessage{
+				Leader: leader,
+			},
+		},
+		Source: source,
+	}
+}
+
+func RoleDistributionMessageFactory(source, target string, role Role) *Event {
+	return &Event{
+		MessageType: MessageType_ROLEDISTRIBUTION,
+		Body: &Event_RoleDistributionMessage{
+			RoleDistributionMessage: &RoleDistributionMessage{
+				Target: target,
+				Role:   role,
+			},
+		},
+		Source: source,
+	}
+}
+
+func VoteMessageFactory(source, target string) *Event {
+	return &Event{
+		MessageType: MessageType_VOTE,
+		Body: &Event_VoteMessage{
+			VoteMessage: &VoteMessage{
 				Target: target,
 			},
 		},

@@ -4,6 +4,7 @@ package gonest;
 
 option go_package = "gonest";
 
+//Enum listant tout les roles possibles.
 enum Role {
     HUMANROLE       = 0;
     WEREWOLFROLE    = 1;
@@ -13,6 +14,7 @@ enum Role {
     CLAIRVOYANTROLE = 5;
 }
 
+//Le leader utilise ce message pour assigner à chaque joueur son role.
 message RoleDistributionMessage {
     string target = 1;
     Role   role   = 2;

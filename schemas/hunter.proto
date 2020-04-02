@@ -4,6 +4,7 @@ package gonest;
 
 option go_package = "gonest";
 
+//Message permettant au chasseur, lorsqu'il meurt, de désigner la personne qu'il souhaite tuer.
 message HunterMessage {
     string target = 1;
 }

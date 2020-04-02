@@ -4,6 +4,7 @@ package gonest;
 
 option go_package = "gonest";
 
+//Message permettant de demander à rentrer dans l'anneau
 message HelloMessage {
 
 }

@@ -4,6 +4,8 @@ package gonest;
 
 option go_package = "gonest";
 
+//Désigne un message envoyé dans le chat
 message ChatMessage {
+    //Contenu du message
     string content = 1;
 }
