@@ -410,7 +410,7 @@ func giveRoles() {
 func helloHandler(c *tcp_server.Client, event *gonest.Event) {
 	message := gonest.ItsHimMessageFactory(lanIPAddress)
 	if right == nil || strings.Split(right.RemoteAddr().String(), ":")[0] == "127.0.0.1" {
-		message.GetItsHimMessage().RightNodeIpAddress = lanIPAddress + ":" + os.Getenv("GOROU_BIND_PORT")
+		message.GetItsHimMessage().RightNodeIpAddress = lanIPAddress
 	} else {
 		message.GetItsHimMessage().RightNodeIpAddress = right.RemoteAddr().String()
 	}
