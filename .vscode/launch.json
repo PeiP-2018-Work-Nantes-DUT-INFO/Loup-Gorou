@@ -1,6 +1,7 @@
 {
     "Version": "2.0.0",
     "configurations": [
+
         {
             "name": "Debug Executable",
             "type": "go",

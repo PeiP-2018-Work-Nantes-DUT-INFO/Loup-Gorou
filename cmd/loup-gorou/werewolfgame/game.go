@@ -3,7 +3,9 @@ package werewolfgame
 import (
 	"errors"
 	"loupgorou/cmd/loup-gorou/gonest"
+	"math/rand"
 	"sort"
+	"time"
 
 	"github.com/looplab/fsm"
 )
@@ -22,10 +24,23 @@ type CurrentPlayer struct {
 	Role        gonest.Role
 }
 
+type DeadPlayer struct {
+	PlayerProps *Player
+	Role        gonest.Role
+}
+
 //CanVote
 //test if the current player is able to vote given the actual state
 func (c *CurrentPlayer) CanVote() bool {
-	return (c.PlayerProps.g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) && c.Role.Type() == gonest.Role_WEREWOLFROLE.Type()) || c.PlayerProps.g.FSM.Is(DAY_VOTE_STATE)
+	return (c.PlayerProps.g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) && c.Role == gonest.Role_WEREWOLFROLE) || c.PlayerProps.g.FSM.Is(DAY_VOTE_STATE)
+}
+
+func (c *CurrentPlayer) AmIDead() bool {
+	if _, ok := c.PlayerProps.g.DeadPlayers[c.PlayerProps.Name]; ok != false {
+		return true
+	} else {
+		return false
+	}
 }
 
 type Game struct {
@@ -41,6 +56,8 @@ type Game struct {
 	votes map[string]string
 	// List all the death that happened during the night
 	MorningDeaths map[string]*Player
+
+	DeadPlayers map[string]*DeadPlayer
 }
 
 // Create a new instance of a game.
@@ -53,9 +70,12 @@ func NewGame(me CurrentPlayer, playersNames []string, callbacks fsm.Callbacks) *
 		}
 	}
 	g := &Game{
-		Players:      players,
-		AlivePlayers: make(map[string]*Player, len(players)),
-		Me:           me,
+		Players:       players,
+		AlivePlayers:  make(map[string]*Player, len(players)),
+		Me:            me,
+		votes:         make(map[string]string, len(players)),
+		DeadPlayers:   make(map[string]*DeadPlayer, len(players)),
+		MorningDeaths: make(map[string]*Player, 5),
 	}
 	for _, player := range players {
 		g.AlivePlayers[player.Name] = player
@@ -87,8 +107,10 @@ func NewGame(me CurrentPlayer, playersNames []string, callbacks fsm.Callbacks) *
 			{Name: START_TRANSITION, Src: []string{INITIAL_STATE}, Dst: NIGHT_WEREWOLF_PLAYING_STATE},
 			{Name: WEREWOLF_VOTE_END_TRANSITION, Src: []string{NIGHT_WEREWOLF_PLAYING_STATE}, Dst: DAY_VOTE_STATE},
 			{Name: END_OF_DAY_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: NIGHT_WEREWOLF_PLAYING_STATE},
-			{Name: ALLVILLAGERS_KILLED_DURING_NIGHT_TRANSITION, Src: []string{NIGHT_WEREWOLF_PLAYING_STATE}, Dst: ENDOFGAME_STATE},
-			{Name: ALLPLAYERS_KILLED_DURING_VOTE, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
+			{Name: ALLWEREWOLF_KILLED_DURING_VOTE_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
+			{Name: ALLHUMAN_KILLED_DURING_VOTE_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
+			{Name: ALLWEREWOLF_KILLED_DURING_NIGHT_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
+			{Name: ALLHUMAN_KILLED_DURING_NIGHT_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
 		},
 		callbacks,
 	)
@@ -98,7 +120,8 @@ func NewGame(me CurrentPlayer, playersNames []string, callbacks fsm.Callbacks) *
 var Fsm *fsm.FSM
 
 //KillPlayer
-//send a killing message wich delete the player from the AlivePlayer table in all the players application
+//delete the player from the AlivePlayer table
+// Used to kill a player when the vote of the day ended
 func (g *Game) KillPlayer(player *Player) error {
 	_, ok := g.AlivePlayers[player.Name]
 	if !ok {
@@ -108,7 +131,24 @@ func (g *Game) KillPlayer(player *Player) error {
 	return nil
 }
 
-//KillPlayer
+// Confirm the death of a player
+func (g *Game) ConfirmDeath(playerName string, role gonest.Role) {
+	g.DeadPlayers[playerName] = &DeadPlayer{
+		g.Players[playerName], role,
+	}
+}
+
+func (g *Game) DoesEveryoneVoted() bool {
+	if g.FSM.Is(DAY_VOTE_STATE) {
+		return len(g.AlivePlayers) == len(g.votes)
+	} else if g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
+		return len(g.votes) == g.NumberOfAliveWerewolfs()
+	} else {
+		return false
+	}
+}
+
+//EatPlayer
 //move the player from the alive table to the morning death table
 func (g *Game) EatPlayer(player *Player) error {
 	_, ok := g.AlivePlayers[player.Name]
@@ -116,7 +156,6 @@ func (g *Game) EatPlayer(player *Player) error {
 		return errors.New("The player is alread dead")
 	}
 	g.MorningDeaths[player.Name] = g.AlivePlayers[player.Name]
-	delete(g.AlivePlayers, player.Name)
 	return nil
 }
 
@@ -174,7 +213,7 @@ func (g *Game) IsCurrentVoteMajorityAbsolute() bool {
 //MostVotedPerson
 //get the most voted person. Handle equality case by comparing the ip adress
 func (g *Game) MostVotedPerson() (p *Player, err error) {
-	if !g.FSM.Is(DAY_VOTE_STATE) || !g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
+	if !g.FSM.Is(DAY_VOTE_STATE) && !g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
 		err = fsm.InvalidEventError{Event: "vote", State: g.FSM.Current()}
 		return
 	}
@@ -215,7 +254,7 @@ func (g *Game) MostVotedPerson() (p *Player, err error) {
 }
 
 //clearVote
-//reinitialise the vote table
+//reset the vote table
 func (g *Game) ClearVote() {
 	g.votes = make(map[string]string)
 }
@@ -226,13 +265,75 @@ func (g *Game) NumberOfVotes() int {
 	return len(g.votes)
 }
 
+func (g *Game) NumberOfAliveWerewolfs() int {
+	werewolfes, _ := GetRoleDistribution(len(g.Players))
+	for _, deadPlayer := range g.DeadPlayers {
+		if deadPlayer.Role == gonest.Role_WEREWOLFROLE {
+			werewolfes -= 1
+		}
+	}
+	return werewolfes
+}
+
+func (g *Game) WerewolfWon() bool {
+	if len(g.AlivePlayers) == g.NumberOfAliveWerewolfs() {
+		return true
+	} else {
+		return false
+	}
+}
+
+func (g *Game) HumansWon() bool {
+	return g.NumberOfAliveWerewolfs() == 0
+}
+
+func (g *Game) GetMorningDeaths() []*Player {
+	deadPlayers := make([]*Player, 0, len(g.MorningDeaths))
+	for _, player := range g.MorningDeaths {
+		deadPlayers = append(deadPlayers, player)
+		delete(g.AlivePlayers, player.Name)
+	}
+	g.MorningDeaths = make(map[string]*Player)
+	return deadPlayers
+}
+
 //Vote
 //Send a vote message
-func (c *Player) Vote(player *Player) error {
+func (c *Player) Vote(name string) error {
+	player, ok := c.g.AlivePlayers[name]
+	if !ok {
+		return errors.New("Player is dead")
+	}
 	if !player.g.FSM.Is(DAY_VOTE_STATE) && !player.g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
 		return errors.New("Current state is not a vote state")
 	}
-	voteChannel <- true
+	// voteChannel <- true
 	player.g.votes[c.Name] = player.Name
 	return nil
+}
+
+func ShuffleRoles(playerCount int) []gonest.Role {
+	roles := make([]gonest.Role, 0, playerCount)
+	werewolves, villagers := GetRoleDistribution(playerCount)
+	for i := 0; i < werewolves; i += 1 {
+		roles = append(roles, gonest.Role_WEREWOLFROLE)
+	}
+	for i := 0; i < villagers; i += 1 {
+		roles = append(roles, gonest.Role_HUMANROLE)
+	}
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(roles), func(i, j int) { roles[i], roles[j] = roles[j], roles[i] })
+	return roles
+}
+
+func GetRoleDistribution(playerCount int) (int, int) {
+	if playerCount <= 8 {
+		return 1, playerCount - 1
+	} else if playerCount <= 11 {
+		return 2, playerCount - 2
+	} else if playerCount <= 17 {
+		return 3, playerCount - 3
+	} else {
+		return 4, playerCount - 4
+	}
 }

@@ -47,6 +47,18 @@ func CupidMessageFactory(source, target1, target2 string) *Event {
 	}
 }
 
+func DeadMessageFactory(source string, role Role) *Event {
+	return &Event{
+		MessageType: MessageType_DEAD,
+		Body: &Event_DeadMessage{
+			DeadMessage: &DeadMessage{
+				Role: role,
+			},
+		},
+		Source: source,
+	}
+}
+
 func HelloMessageFactory(source string) *Event {
 	return &Event{
 		MessageType: MessageType_HELLO,

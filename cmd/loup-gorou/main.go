@@ -79,7 +79,10 @@ func promptUser() {
 		text, _ := reader.ReadString('\n')
 		text = strings.TrimSuffix(text, "\n")
 		text = strings.TrimSuffix(text, "\r")
-
+		if gameInstance.Me.AmIDead() {
+			fmt.Println("You are dead")
+			return
+		}
 		if text != "" {
 			if text[0] == '!' {
 				if len(text) > 6 && text[1:5] == "vote" {
@@ -91,6 +94,10 @@ func promptUser() {
 						if value == target {
 							valid = true
 						}
+					}
+					if _, ok := gameInstance.AlivePlayers[target]; !ok {
+						fmt.Println("Player is dead")
+						continue
 					}
 					if gameInstance.Me.CanVote() {
 						if valid {
@@ -167,6 +174,8 @@ func main() {
 		event, err := frame.DecodeEventB64(strings.TrimSuffix(message, "\n"))
 		if err != nil {
 			panic(err.Error())
+		} else {
+			//fmt.Println(event.String())
 		}
 
 		if event.GetSource() != lanIPAddress {
@@ -211,6 +220,8 @@ func broadcastInProgress(c *tcp_server.Client, message string, event *gonest.Eve
 		leaderElectionHandler(event)
 	case gonest.MessageType_VOTE:
 		voteHandler(event)
+	case gonest.MessageType_DEAD:
+		deadHandler(event)
 	}
 }
 
@@ -245,8 +256,15 @@ func broadcastDone(message string, event *gonest.Event) {
 			}
 
 		}
+	// Handler mixé, utilisé à la fois lorsqu'un broadcast est en progress, et est terminé
 	case gonest.MessageType_ACK:
 		ackHandler(event)
+	case gonest.MessageType_VOTE:
+		voteHandler(event)
+	case gonest.MessageType_CHAT:
+		chatHandler(event)
+	case gonest.MessageType_DEAD:
+		deadHandler(event)
 	}
 }
 
@@ -276,7 +294,7 @@ func startConnection() {
 		}
 	}
 
-	//New client part
+	//New client partd()
 	if right.RemoteAddr().String() != "[::1]:"+os.Getenv("GOROU_BIND_PORT") && right.RemoteAddr().String() != "127.0.0.1:"+os.Getenv("GOROU_BIND_PORT") {
 		rightMutex.Lock()
 
@@ -345,12 +363,25 @@ func initGame(role gonest.Role) {
 		listIPAddress,
 		fsm.Callbacks{
 			"leave_state": func(e *fsm.Event) {
+				if e.Src != werewolfgame.INITIAL_STATE {
+					sendACK()
+					e.Async()
+				}
 				fmt.Println("GAME FSM: Leaving state from", e.Src)
 			},
 			"enter_state": func(e *fsm.Event) {
 				fmt.Println("GAME FSM: Entering state", e.Dst)
 			},
 			"enter_" + werewolfgame.NIGHT_WEREWOLF_PLAYING_STATE: func(e *fsm.Event) {
+				if gameInstance.WerewolfWon() {
+					fmt.Println("Werewolfs won")
+					e.Cancel()
+					gameInstance.FSM.Event(werewolfgame.ALLHUMAN_KILLED_DURING_VOTE_TRANSITION)
+				} else if gameInstance.HumansWon() {
+					fmt.Println("Humans won")
+					e.Cancel()
+					gameInstance.FSM.Event(werewolfgame.ALLWEREWOLF_KILLED_DURING_VOTE_TRANSITION)
+				}
 				fmt.Println("GAMEMASTER: The night comes on Thiercelieux ...")
 				fmt.Println("GAMEMASTER: The werewolves wake up")
 				if gameInstance.Me.Role == gonest.Role_WEREWOLFROLE {
@@ -359,13 +390,35 @@ func initGame(role gonest.Role) {
 			},
 			"leave_" + werewolfgame.NIGHT_WEREWOLF_PLAYING_STATE: func(e *fsm.Event) {
 				fmt.Println("GAMEMASTER: Morning comes on the village. A ray of sunlight light up the bell tower.")
-				fmt.Println("GAMEMASTER: Morning comes on the village.")
-				player, _ := gameInstance.DecideVote()
-				fmt.Println("GAMEMASTER:", player.Name, "is dead.")
+				deadPlayers := gameInstance.GetMorningDeaths()
+				if len(deadPlayers) > 0 {
+					fmt.Println("People got killed this night :")
+					for _, player := range deadPlayers {
+						fmt.Println("-", player.Name)
+						if player.Name == lanIPAddress {
+							sendDead(gameInstance.Me.Role)
+						}
+					}
+				} else {
+					fmt.Println("No one died during this night.")
+				}
+			},
+			"enter_" + werewolfgame.DAY_VOTE_STATE: func(e *fsm.Event) {
+				if gameInstance.WerewolfWon() {
+					fmt.Println("Werewolfs won")
+					e.Cancel()
+					gameInstance.FSM.Event(werewolfgame.ALLHUMAN_KILLED_DURING_VOTE_TRANSITION)
+				} else if gameInstance.HumansWon() {
+					fmt.Println("Humans won")
+					e.Cancel()
+					gameInstance.FSM.Event(werewolfgame.ALLWEREWOLF_KILLED_DURING_VOTE_TRANSITION)
+				}
 			},
 			"leave_" + werewolfgame.DAY_VOTE_STATE: func(e *fsm.Event) {
-				player, _ := gameInstance.DecideVote()
-				fmt.Println("GAMEMASTER:", player, "is dead.")
+
+			},
+			"enter_" + werewolfgame.ENDOFGAME_STATE: func(e *fsm.Event) {
+				os.Exit(0)
 			},
 		})
 	sendACK()
@@ -399,7 +452,7 @@ func isEverybodyOk() (result bool) {
 }
 
 func giveRoles() {
-	roles := gonest.ShuffleRoles(len(listIPAddress))
+	roles := werewolfgame.ShuffleRoles(len(listIPAddress))
 	for index, player := range listIPAddress {
 		fmt.Println(roles[index], "send to", player)
 		go sendRole(player, roles[index])
@@ -436,6 +489,16 @@ func helloHandler(c *tcp_server.Client, event *gonest.Event) {
 	}
 }
 
+func deadHandler(event *gonest.Event) {
+	if event.GetSource() != lanIPAddress {
+		go eventPropagator(event, right)
+	}
+	deadMessage := event.GetDeadMessage()
+	gameInstance.ConfirmDeath(event.GetSource(), deadMessage.GetRole())
+	fmt.Println("GAMEMASTER:", event.GetSource(), "was", deadMessage.GetRole())
+
+}
+
 func ipListHandler(event *gonest.Event) {
 	event.GetIpListMessage().IpAdress = append(event.GetIpListMessage().IpAdress, lanIPAddress)
 	eventPropagator(event, right)
@@ -450,22 +513,31 @@ func roleHandler(event *gonest.Event) {
 }
 
 func voteHandler(event *gonest.Event) {
-	go eventPropagator(event, right)
+	if event.GetSource() != lanIPAddress {
+		go eventPropagator(event, right)
+	}
 	vote := event.GetVoteMessage()
-	err := gameInstance.AlivePlayers[event.GetSource()].Vote(gameInstance.AlivePlayers[vote.GetTarget()])
+	err := gameInstance.AlivePlayers[event.GetSource()].Vote(vote.GetTarget())
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println("GAMEMASTER:", event.GetSource(), "a voté pour", vote.GetTarget())
-	werewolfes, villagers := gonest.GetRoleDistribution(len(listIPAddress))
-	fmt.Println(werewolfes)
-	fmt.Println(villagers)
-	fmt.Println(gameInstance.NumberOfVotes())
-	fmt.Println(gameInstance.FSM.Current())
-	if gameInstance.FSM.Is(werewolfgame.NIGHT_WEREWOLF_PLAYING_STATE) && werewolfes == gameInstance.NumberOfVotes() {
-		_ = gameInstance.FSM.Event(werewolfgame.WEREWOLF_VOTE_END_TRANSITION)
-	} else if villagers == gameInstance.NumberOfVotes() {
-		_ = gameInstance.FSM.Event(werewolfgame.END_OF_DAY_TRANSITION)
+	fmt.Println("GAMEMASTER:", event.GetSource(), "a voté pour", vote.GetTarget()+".")
+	if gameInstance.DoesEveryoneVoted() {
+		player, err := gameInstance.DecideVote()
+		if err != nil {
+			panic(err.Error())
+		}
+		if gameInstance.FSM.Is(werewolfgame.NIGHT_WEREWOLF_PLAYING_STATE) {
+			_ = gameInstance.FSM.Event(werewolfgame.WEREWOLF_VOTE_END_TRANSITION)
+		} else {
+			if gameInstance.Me.PlayerProps.Name == player.Name {
+				fmt.Println("GAMEMASTER:", "You are dead")
+				sendDead(gameInstance.Me.Role)
+			} else {
+				fmt.Println("GAMEMASTER:", player.Name, "is dead.")
+			}
+			_ = gameInstance.FSM.Event(werewolfgame.END_OF_DAY_TRANSITION)
+		}
 	}
 }
 
@@ -479,21 +551,46 @@ func ackHandler(event *gonest.Event) {
 	source := event.GetSource()
 	ackMap[source] = true
 	if isEverybodyOk() {
+		fmt.Println("Everybody is okay.")
 		if fsmConnection.Is(LEADERELECTION_STATE) {
 			_ = fsmConnection.Event(LEADER_ELECTED_TRANSITION)
 			if leader == lanIPAddress {
 				giveRoles()
 			}
 		} else if fsmConnection.Is(GAME_STATE) {
-			//roleDistributionPhase = false
-			fmt.Println("LANCEMENT DE LA PARTIE")
-			fmt.Println("GAMEMASTER: Player in game are:")
-			for _, value := range listIPAddress {
-				fmt.Println("\t-", value)
-			}
-			_ = gameInstance.FSM.Event(werewolfgame.START_TRANSITION)
-			go promptUser()
+			switch gameInstance.FSM.Current() {
+			case werewolfgame.INITIAL_STATE:
+				//roleDistributionPhase = false
+				fmt.Println("LANCEMENT DE LA PARTIE")
+				fmt.Println("GAMEMASTER: Player in game are:")
+				for _, value := range listIPAddress {
+					fmt.Println("\t-", value)
+				}
+				_ = gameInstance.FSM.Event(werewolfgame.START_TRANSITION)
+				go promptUser()
+				/*
+					} else if fsmConnection.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
+						if (isAllWerewolfDead()) {
+							_ = gameInstance.FSM.Event(werewolfgame.ALLWEREWOLF_KILLED_DURING_NIGHT_TRANSITION)
+						} else if (isAllVillagerDead()) {
+							_ = gameInstance.FSM.Event(werewolfgame.ALLHUMAN_KILLED_DURING_NIGHT_TRANSITION)
+						} else {
+							_ = gameInstance.FSM.Event(werewolfgame.WEREWORLF_END_TRANDITION)
+						}
 
+					} else if fsmConnection.Is(DAY_VOTE_STATE) {
+						if (isAllWerewolfDead()) {
+							_ = gameInstance.FSM.Event(werewolfgame.ALLWEREWOLF_KILLED_DURING_VOTE)
+						} else if (isAllVillagerDead()) {
+							_ = gameInstance.FSM.Event(werewolfgame.ALLHUMAN_KILLED_DURING_VOTE)
+						} else {
+							_ = gameInstance.FSM.Event(werewolfgame.END_OF_DAY_TRANSITION)
+						}
+				*/
+			default:
+				gameInstance.FSM.Transition()
+
+			}
 		}
 		resetAckMap()
 	}
@@ -501,7 +598,9 @@ func ackHandler(event *gonest.Event) {
 }
 
 func chatHandler(event *gonest.Event) {
-	go eventPropagator(event, right)
+	if event.GetSource() != lanIPAddress {
+		go eventPropagator(event, right)
+	}
 	contentMessage := event.GetChatMessage().GetContent()
 	source := event.GetSource()
 
@@ -512,10 +611,10 @@ func leaderElectionHandler(event *gonest.Event) {
 	leader := event.GetLeaderElectionMessage().GetLeader()
 	eventPropagator(event, right)
 	if !fsmConnection.Is(LEADERELECTION_STATE) {
-		fsmConnection.SetState(LEADERELECTION_STATE)
+		fsmConnection.SetState(ROLEDISTRIBUTION_STATE)
 		sendACK()
 	}
-	fmt.Println("Leader elected is ", leader, ", now awaiting from him to get my role !")
+	fmt.Println("Leader elected is", leader, ", now awaiting from him to get my role !")
 }
 
 // MESSAGE CREATION AND SEND
@@ -542,6 +641,11 @@ func sendACK() {
 		initAckMap()
 	}
 	event := gonest.AckMessageFactory(lanIPAddress)
+	eventPropagator(event, right)
+}
+
+func sendDead(role gonest.Role) {
+	event := gonest.DeadMessageFactory(lanIPAddress, role)
 	eventPropagator(event, right)
 }
 
