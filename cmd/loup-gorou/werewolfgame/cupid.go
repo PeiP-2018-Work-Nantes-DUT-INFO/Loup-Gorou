@@ -54,7 +54,7 @@ func (a *CupidAction) HasSentAllArrows() bool {
 
 func (a *CupidAction) GetArrows() (string, string, error) {
 	if !a.HasSentAllArrows() {
-		return "", "", errors.New("You didn't send all arrows")
+		return "", "", errors.New("You didn't sent all arrows")
 	}
 	return a.target1, a.target2, nil
 }
