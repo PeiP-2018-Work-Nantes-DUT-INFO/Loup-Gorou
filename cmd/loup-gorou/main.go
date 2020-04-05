@@ -121,7 +121,7 @@ func promptUser() {
 //initialisation of the different Callback
 func init() {
 	log.SetFormatter(&prefixed.TextFormatter{})
-	log.SetLevel(log.TraceLevel)
+	log.SetLevel(log.InfoLevel)
 	gamemaster = log.WithField("prefix", "GAMEMASTER")
 	// load .env file
 	err := godotenv.Load()
@@ -266,7 +266,6 @@ func broadcastDone(message string, event *gonest.Event) {
 	case gonest.MessageType_DEAD:
 		deadHandler(event)
 	case gonest.MessageType_CLAIRVOYANT:
-		go sendACK()
 		if !gameInstance.Me.AmIDead() {
 			clairvoyantPart := event.GetClairvoyantMessage()
 			gamemaster.Warnf("%s has the role %s.", clairvoyantPart.GetTarget(), clairvoyantPart.GetRole())
@@ -405,7 +404,11 @@ func initGame(role gonest.Role) {
 				}
 			},
 			"enter_" + werewolfgame.DAY_VOTE_STATE: func(e *fsm.Event) {
-				checkVictoryStateHandler(e)
+				ended := checkVictoryStateHandler(e)
+				if !ended && gameInstance.Me.CanVote() {
+					gamemaster.Info("You can now tchat")
+					gamemaster.Info("You are now allowed to vote. Vote with !vote [ipaddress]")
+				}
 			},
 			"enter_" + werewolfgame.NIGHT_CLAIRVOYANT_PLAYING_STATE: func(e *fsm.Event) {
 				checkVictoryStateHandler(e)
@@ -611,25 +614,6 @@ func ackHandler(event *gonest.Event) {
 				}
 				_ = gameInstance.FSM.Event(werewolfgame.START_TRANSITION)
 				go promptUser()
-				/*
-					} else if fsmConnection.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
-						if (isAllWerewolfDead()) {
-							_ = gameInstance.FSM.Event(werewolfgame.ALLWEREWOLF_KILLED_DURING_NIGHT_TRANSITION)
-						} else if (isAllVillagerDead()) {
-							_ = gameInstance.FSM.Event(werewolfgame.ALLHUMAN_KILLED_DURING_NIGHT_TRANSITION)
-						} else {
-							_ = gameInstance.FSM.Event(werewolfgame.WEREWORLF_END_TRANDITION)
-						}
-
-					} else if fsmConnection.Is(DAY_VOTE_STATE) {
-						if (isAllWerewolfDead()) {
-							_ = gameInstance.FSM.Event(werewolfgame.ALLWEREWOLF_KILLED_DURING_VOTE)
-						} else if (isAllVillagerDead()) {
-							_ = gameInstance.FSM.Event(werewolfgame.ALLHUMAN_KILLED_DURING_VOTE)
-						} else {
-							_ = gameInstance.FSM.Event(werewolfgame.END_OF_DAY_TRANSITION)
-						}
-				*/
 			default:
 				err := gameInstance.FSM.Transition()
 				if err != nil {
@@ -664,14 +648,9 @@ func chatHandler(event *gonest.Event) {
 func leaderElectionHandler(event *gonest.Event) {
 	leader := event.GetLeaderElectionMessage().GetLeader()
 	eventPropagator(event, right)
-	/*if !fsmConnection.Is(LEADERELECTION_STATE) {
-		fsmConnection.SetState(ROLEDISTRIBUTION_STATE)
-		sendACK()
-	}*/
 	log.Info("Leader elected is ", leader, ", now awaiting from him to get my role !")
 }
 
-// MESSAGE CREATION AND SEND
 func eventPropagator(event *gonest.Event, right net.Conn) {
 	encoded, _ := frame.EncodeEventB64(event)
 	rightMutex.Lock()
