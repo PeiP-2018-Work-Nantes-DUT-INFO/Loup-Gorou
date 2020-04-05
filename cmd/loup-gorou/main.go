@@ -193,7 +193,7 @@ func init() {
 
 func main() {
 	log.Infof("%s v%s\nREV %s branch %s", "loup-gorou", "0.0.4-CUPID-EDITION", "3", "cupid-simons")
-	log.Info("You can set the log level @ line 148 in main.go. TraceLevel available to show all packets")
+	log.Info("You can set the log level @ line 148 in main.go. TraceLevel to show all packets")
 	log.Infof("NEED %d players to be connected before start", minPlayer)
 	//Initialisation of the tcp server.
 	server := tcp_server.New(fmt.Sprintf("%s:%s",
