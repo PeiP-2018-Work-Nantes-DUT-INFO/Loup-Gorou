@@ -305,7 +305,6 @@ func startConnection() {
 		//recuperation de l'adresse IP
 		reader := bufio.NewReader(os.Stdin)
 		text, _ := reader.ReadString('\n')
-		//text := ""
 		text = strings.TrimSuffix(text, "\n")
 		text = strings.TrimSuffix(text, "\r")
 
@@ -634,7 +633,7 @@ func voteHandler(event *gonest.Event) {
 				gameInstance.KillPlayer(gameInstance.Me.PlayerProps)
 				sendDead(gameInstance.Me.Role, gonest.Reason_CUPID_LOVER)
 			} else {
-				gamemaster.Info(player.Name, "is dead.")
+				gamemaster.Info(player.Name, " is dead.")
 			}
 			_ = gameInstance.FSM.Event(werewolfgame.END_OF_DAY_TRANSITION)
 		}
@@ -671,7 +670,6 @@ func ackHandler(event *gonest.Event) {
 		} else if fsmConnection.Is(GAME_STATE) {
 			switch gameInstance.FSM.Current() {
 			case werewolfgame.INITIAL_STATE:
-				//roleDistributionPhase = false
 				gamemaster.Warn("STARTING GAME")
 				gamemaster.Info("Player in game are:")
 				for _, value := range listIPAddress {
@@ -679,25 +677,6 @@ func ackHandler(event *gonest.Event) {
 				}
 				_ = gameInstance.FSM.Event(werewolfgame.START_TRANSITION)
 				go promptUser()
-				/*
-					} else if fsmConnection.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
-						if (isAllWerewolfDead()) {
-							_ = gameInstance.FSM.Event(werewolfgame.ALLWEREWOLF_KILLED_DURING_NIGHT_TRANSITION)
-						} else if (isAllVillagerDead()) {
-							_ = gameInstance.FSM.Event(werewolfgame.ALLHUMAN_KILLED_DURING_NIGHT_TRANSITION)
-						} else {
-							_ = gameInstance.FSM.Event(werewolfgame.WEREWORLF_END_TRANDITION)
-						}
-
-					} else if fsmConnection.Is(DAY_VOTE_STATE) {
-						if (isAllWerewolfDead()) {
-							_ = gameInstance.FSM.Event(werewolfgame.ALLWEREWOLF_KILLED_DURING_VOTE)
-						} else if (isAllVillagerDead()) {
-							_ = gameInstance.FSM.Event(werewolfgame.ALLHUMAN_KILLED_DURING_VOTE)
-						} else {
-							_ = gameInstance.FSM.Event(werewolfgame.END_OF_DAY_TRANSITION)
-						}
-				*/
 			default:
 				err := gameInstance.FSM.Transition()
 				if err != nil {
@@ -723,10 +702,6 @@ func chatHandler(event *gonest.Event) {
 func leaderElectionHandler(event *gonest.Event) {
 	leader := event.GetLeaderElectionMessage().GetLeader()
 	eventPropagator(event, right)
-	/*if !fsmConnection.Is(LEADERELECTION_STATE) {
-		fsmConnection.SetState(ROLEDISTRIBUTION_STATE)
-		sendACK()
-	}*/
 	log.Info("Leader elected is ", leader, ", now awaiting from him to get my role !")
 }
 

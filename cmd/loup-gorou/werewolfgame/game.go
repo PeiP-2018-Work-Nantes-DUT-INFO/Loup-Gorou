@@ -10,9 +10,6 @@ import (
 	"github.com/looplab/fsm"
 )
 
-// This channel is used to know when a new vote is made, an restart the timeout.
-//var voteChannel chan bool = make(chan bool)
-
 type Player struct {
 	Name  string
 	g     *Game
@@ -103,23 +100,6 @@ func NewGame(me CurrentPlayer, playersNames []string, callbacks fsm.Callbacks) *
 	}
 	g.Me.PlayerProps.g = g
 
-	// TODO.
-	/*callbacks["enter_"+NIGHT_WEREWOLF_PLAYING_STATE] = func(e *fsm.Event) {
-		args := make([]interface{}, 1)
-		args[0] = NORMAL_END_OF_VOTE
-		e.Args = args
-		//go g.voteCallback(e)
-		callbacks["enter_"+NIGHT_WEREWOLF_PLAYING_STATE](e)
-	} */
-
-	/*callbacks["enter_"+DAY_VOTE_STATE] = func(e *fsm.Event) {
-		args := make([]interface{}, 1)
-		args[0] = NORMAL_END_OF_VOTE
-		e.Args = args
-		//go g.voteCallback(e)
-		callbacks["enter_"+DAY_VOTE_STATE](e)
-	}*/
-
 	g.FSM = fsm.NewFSM(
 
 		INITIAL_STATE,
@@ -193,33 +173,6 @@ func (g *Game) DecideVote() (p *Player, err error) {
 	g.ClearVote()
 	return
 }
-
-// TODO
-/*func (g *Game) voteCallback(e *fsm.Event) {
-	var transition string
-	if g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
-		transition = WEREWOLF_VOTE_END_TRANSITION
-	} else {
-		transition = END_OF_DAY_TRANSITION
-	}
-	var end bool = false
-	for !end {
-		select {
-		case <-time.After(time.Second * 30):
-			//args := make([]interface{}, 1)
-			//args[0] = NORMAL_END_OF_VOTE
-			//e.Args = args
-
-			_ = g.FSM.Event(transition)
-			end = true
-		case <-time.After(time.Second * 30):
-			if g.isCurrentVoteMajorityAbsolute() {
-				_ = g.FSM.Event(transition)
-				end = true
-			}
-		}
-	}
-}*/
 
 func (g *Game) IsCurrentVoteMajorityAbsolute() bool {
 	sVotePlay := make(map[string]int)
@@ -326,7 +279,6 @@ func (c *Player) Vote(name string) error {
 	if !player.g.FSM.Is(DAY_VOTE_STATE) && !player.g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
 		return errors.New("Current state is not a vote state")
 	}
-	// voteChannel <- true
 	player.g.votes[c.Name] = player.Name
 	return nil
 }
