@@ -25,11 +25,14 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+//Message permettant de collecter l'adresse ip de chaque personne dans l'anneau.
+//Chaque personne recevant ce message va y ajouter son adresse ip et renvoyer le message à son membre de droie dans l'anneau.
 type IpListMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	//repeated désigne un champ répetable à l'infini.
 	IpAdress []string `protobuf:"bytes,1,rep,name=ipAdress,proto3" json:"ipAdress,omitempty"`
 }
 

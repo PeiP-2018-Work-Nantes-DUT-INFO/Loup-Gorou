@@ -6,7 +6,15 @@ option go_package = "gonest";
 
 import "roledistribution.proto";
 
+enum Reason {
+    NORMAL        = 0;
+    HUNTER_KILLED = 1;
+    CUPID_LOVER   = 2;
+    WITCH_KILLED  = 3;
+}
+
 //Message envoyé lorsqu'un joueur meurt, il va y envoyé son rôle pour que tout le monde le connaisse.
 message DeadMessage {
     Role role = 1;
+    Reason reason = 2;
 }

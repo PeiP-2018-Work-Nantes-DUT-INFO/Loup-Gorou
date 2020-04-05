@@ -25,6 +25,7 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+//Enum listant tout les roles possibles.
 type Role int32
 
 const (
@@ -83,6 +84,7 @@ func (Role) EnumDescriptor() ([]byte, []int) {
 	return file_roledistribution_proto_rawDescGZIP(), []int{0}
 }
 
+//Le leader utilise ce message pour assigner à chaque joueur son role.
 type RoleDistributionMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

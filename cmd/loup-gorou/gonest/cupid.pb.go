@@ -25,6 +25,7 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+//Designe les 2 cibles de cupidon.
 type CupidMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

@@ -4,8 +4,10 @@ package gonest;
 
 option go_package = "gonest";
 
+import "roledistribution.proto";
+
 //Message de la voyante, un champs désigne la cible que l'on choisit. L'autre le role, c'ets la cible du message qui rentrera les informations sur son role.
 message ClairvoyantMessage {
     string target = 1;
-    string role = 2;
+    Role role = 2;
 }

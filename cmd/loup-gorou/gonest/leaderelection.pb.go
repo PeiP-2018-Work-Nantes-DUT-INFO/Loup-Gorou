@@ -25,6 +25,7 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+//Message envoyé par le leader, pour assurer que tout le monde est le meme leader.
 type LeaderElectionMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

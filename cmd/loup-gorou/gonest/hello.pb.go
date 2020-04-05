@@ -25,6 +25,7 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+//Message permettant de demander à rentrer dans l'anneau
 type HelloMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

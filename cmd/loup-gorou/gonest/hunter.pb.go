@@ -25,6 +25,7 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+//Message permettant au chasseur, lorsqu'il meurt, de désigner la personne qu'il souhaite tuer.
 type HunterMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

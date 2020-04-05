@@ -25,12 +25,66 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+type Reason int32
+
+const (
+	Reason_NORMAL        Reason = 0
+	Reason_HUNTER_KILLED Reason = 1
+	Reason_CUPID_LOVER   Reason = 2
+	Reason_WITCH_KILLED  Reason = 3
+)
+
+// Enum value maps for Reason.
+var (
+	Reason_name = map[int32]string{
+		0: "NORMAL",
+		1: "HUNTER_KILLED",
+		2: "CUPID_LOVER",
+		3: "WITCH_KILLED",
+	}
+	Reason_value = map[string]int32{
+		"NORMAL":        0,
+		"HUNTER_KILLED": 1,
+		"CUPID_LOVER":   2,
+		"WITCH_KILLED":  3,
+	}
+)
+
+func (x Reason) Enum() *Reason {
+	p := new(Reason)
+	*p = x
+	return p
+}
+
+func (x Reason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Reason) Descriptor() protoreflect.EnumDescriptor {
+	return file_dead_proto_enumTypes[0].Descriptor()
+}
+
+func (Reason) Type() protoreflect.EnumType {
+	return &file_dead_proto_enumTypes[0]
+}
+
+func (x Reason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Reason.Descriptor instead.
+func (Reason) EnumDescriptor() ([]byte, []int) {
+	return file_dead_proto_rawDescGZIP(), []int{0}
+}
+
+//Message envoyé lorsqu'un joueur meurt, il va y envoyé son rôle pour que tout le monde le connaisse.
 type DeadMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Role Role `protobuf:"varint,1,opt,name=role,proto3,enum=gonest.Role" json:"role,omitempty"`
+	Role   Role   `protobuf:"varint,1,opt,name=role,proto3,enum=gonest.Role" json:"role,omitempty"`
+	Reason Reason `protobuf:"varint,2,opt,name=reason,proto3,enum=gonest.Reason" json:"reason,omitempty"`
 }
 
 func (x *DeadMessage) Reset() {
@@ -72,16 +126,31 @@ func (x *DeadMessage) GetRole() Role {
 	return Role_HUMANROLE
 }
 
+func (x *DeadMessage) GetReason() Reason {
+	if x != nil {
+		return x.Reason
+	}
+	return Reason_NORMAL
+}
+
 var File_dead_proto protoreflect.FileDescriptor
 
 var file_dead_proto_rawDesc = []byte{
 	0x0a, 0x0a, 0x64, 0x65, 0x61, 0x64, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x06, 0x67, 0x6f,
 	0x6e, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x72, 0x6f, 0x6c, 0x65, 0x64, 0x69, 0x73, 0x74, 0x72, 0x69,
-	0x62, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x2f, 0x0a, 0x0b,
+	0x62, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x57, 0x0a, 0x0b,
 	0x44, 0x65, 0x61, 0x64, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x20, 0x0a, 0x04, 0x72,
 	0x6f, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x0c, 0x2e, 0x67, 0x6f, 0x6e, 0x65,
-	0x73, 0x74, 0x2e, 0x52, 0x6f, 0x6c, 0x65, 0x52, 0x04, 0x72, 0x6f, 0x6c, 0x65, 0x42, 0x08, 0x5a,
-	0x06, 0x67, 0x6f, 0x6e, 0x65, 0x73, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x73, 0x74, 0x2e, 0x52, 0x6f, 0x6c, 0x65, 0x52, 0x04, 0x72, 0x6f, 0x6c, 0x65, 0x12, 0x26, 0x0a,
+	0x06, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x0e, 0x2e,
+	0x67, 0x6f, 0x6e, 0x65, 0x73, 0x74, 0x2e, 0x52, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x52, 0x06, 0x72,
+	0x65, 0x61, 0x73, 0x6f, 0x6e, 0x2a, 0x4a, 0x0a, 0x06, 0x52, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x12,
+	0x0a, 0x0a, 0x06, 0x4e, 0x4f, 0x52, 0x4d, 0x41, 0x4c, 0x10, 0x00, 0x12, 0x11, 0x0a, 0x0d, 0x48,
+	0x55, 0x4e, 0x54, 0x45, 0x52, 0x5f, 0x4b, 0x49, 0x4c, 0x4c, 0x45, 0x44, 0x10, 0x01, 0x12, 0x0f,
+	0x0a, 0x0b, 0x43, 0x55, 0x50, 0x49, 0x44, 0x5f, 0x4c, 0x4f, 0x56, 0x45, 0x52, 0x10, 0x02, 0x12,
+	0x10, 0x0a, 0x0c, 0x57, 0x49, 0x54, 0x43, 0x48, 0x5f, 0x4b, 0x49, 0x4c, 0x4c, 0x45, 0x44, 0x10,
+	0x03, 0x42, 0x08, 0x5a, 0x06, 0x67, 0x6f, 0x6e, 0x65, 0x73, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x33,
 }
 
 var (
@@ -96,18 +165,21 @@ func file_dead_proto_rawDescGZIP() []byte {
 	return file_dead_proto_rawDescData
 }
 
+var file_dead_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_dead_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_dead_proto_goTypes = []interface{}{
-	(*DeadMessage)(nil), // 0: gonest.DeadMessage
-	(Role)(0),           // 1: gonest.Role
+	(Reason)(0),         // 0: gonest.Reason
+	(*DeadMessage)(nil), // 1: gonest.DeadMessage
+	(Role)(0),           // 2: gonest.Role
 }
 var file_dead_proto_depIdxs = []int32{
-	1, // 0: gonest.DeadMessage.role:type_name -> gonest.Role
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 0: gonest.DeadMessage.role:type_name -> gonest.Role
+	0, // 1: gonest.DeadMessage.reason:type_name -> gonest.Reason
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_dead_proto_init() }
@@ -135,13 +207,14 @@ func file_dead_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_dead_proto_rawDesc,
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   1,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_dead_proto_goTypes,
 		DependencyIndexes: file_dead_proto_depIdxs,
+		EnumInfos:         file_dead_proto_enumTypes,
 		MessageInfos:      file_dead_proto_msgTypes,
 	}.Build()
 	File_dead_proto = out.File

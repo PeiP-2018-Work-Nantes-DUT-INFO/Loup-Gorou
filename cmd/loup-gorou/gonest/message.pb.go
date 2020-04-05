@@ -25,6 +25,7 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+//Defini le type de message
 type MessageType int32
 
 const (
@@ -104,12 +105,16 @@ func (MessageType) EnumDescriptor() ([]byte, []int) {
 	return file_message_proto_rawDescGZIP(), []int{0}
 }
 
+//Message de base que l'on va envoyé dans nos échanges entre clients
 type Event struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	//Type de message
 	MessageType MessageType `protobuf:"varint,1,opt,name=messageType,proto3,enum=gonest.MessageType" json:"messageType,omitempty"`
+	//onof est un attribut qui nous permet de choisir un des type listé dans celui-ci
+	//
 	// Types that are assignable to Body:
 	//	*Event_AckMessage
 	//	*Event_ItsHimMessage
@@ -124,8 +129,9 @@ type Event struct {
 	//	*Event_LeaderElectionMessage
 	//	*Event_RoleDistributionMessage
 	//	*Event_DeadMessage
-	Body   isEvent_Body `protobuf_oneof:"body"`
-	Source string       `protobuf:"bytes,12,opt,name=source,proto3" json:"source,omitempty"`
+	Body isEvent_Body `protobuf_oneof:"body"`
+	//adresse ip de la personne qui est à la source du message
+	Source string `protobuf:"bytes,12,opt,name=source,proto3" json:"source,omitempty"`
 }
 
 func (x *Event) Reset() {

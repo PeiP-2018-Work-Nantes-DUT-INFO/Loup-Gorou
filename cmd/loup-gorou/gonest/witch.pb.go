@@ -25,6 +25,7 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+//Enum désignant les types d'action que peut faire la sorcière.
 type WitchAction int32
 
 const (
@@ -74,6 +75,7 @@ func (WitchAction) EnumDescriptor() ([]byte, []int) {
 	return file_witch_proto_rawDescGZIP(), []int{0}
 }
 
+//Message utilisé par la sorcière, elle y definit l'action de son choix et sa cible.
 type WitchMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

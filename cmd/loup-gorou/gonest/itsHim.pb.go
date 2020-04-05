@@ -25,6 +25,8 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+//Message recu lorsque l'on demande de rentrer dans l'anneau.
+//"rightNodeIpAddress" désigne la personne a qui on doit ouvrir une connection pour renteer dans l'anneau.
 type ItsHimMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
