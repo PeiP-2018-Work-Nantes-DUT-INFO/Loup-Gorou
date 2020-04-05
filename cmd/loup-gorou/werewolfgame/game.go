@@ -11,7 +11,7 @@ import (
 )
 
 // This channel is used to know when a new vote is made, an restart the timeout.
-var voteChannel chan bool = make(chan bool)
+//var voteChannel chan bool = make(chan bool)
 
 type Player struct {
 	Name  string
@@ -47,12 +47,13 @@ func (c *CurrentPlayer) CanVote() bool {
 }
 
 func (c *CurrentPlayer) AmIDead() bool {
-	if _, ok := c.PlayerProps.g.DeadPlayers[c.PlayerProps.Name]; ok != false {
+	if _, ok := c.PlayerProps.g.DeadPlayers[c.PlayerProps.Name]; ok {
 		return true
 	} else {
 		return false
 	}
 }
+
 func (c *CurrentPlayer) SetContext(key string, context interface{}) {
 	c.roleContexts[key] = context
 }
