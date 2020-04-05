@@ -46,7 +46,7 @@ var (
 	lanIPAddress        string                                          //contains our ip address with the tcp server port
 	rightMutex          *sync.Mutex                = &sync.Mutex{}      //mutex to protect the right connection
 	listIPAddress                                  = make([]string, 10) //contains every ip address of the players in the ring.
-	minPlayer                                      = 9                  // the value is set at 2 for test
+	minPlayer                                      = 3                  // the value is set at 2 for test
 	ackMap              map[string]int                                  //in key we have the ip addresses of the players and the value is the result is if they acquit the state.
 	timerEndPreparation *secondstimer.SecondsTimer                      //timer start when we have the minimum number of player in the ring, when the timer is finished, the game start. (the time will be redifined in the future).
 	leader              string                                          //contains the leader ip address
@@ -350,13 +350,7 @@ func timerFunction() {
 
 func initGame(role gonest.Role) {
 	gamemaster.Warn("You have the role ", role.String())
-	gameInstance = werewolfgame.NewGame(werewolfgame.CurrentPlayer{
-		PlayerProps: &werewolfgame.Player{
-			Name:  lanIPAddress,
-			Alive: true,
-		},
-		Role: role,
-	},
+	gameInstance = werewolfgame.NewGame(werewolfgame.NewCurrentPlayer(lanIPAddress, role),
 		listIPAddress,
 		fsm.Callbacks{
 			"leave_state": func(e *fsm.Event) {
@@ -387,7 +381,7 @@ func initGame(role gonest.Role) {
 					for _, player := range deadPlayers {
 						gamemaster.Println("\t\t-", player.Name)
 						if player.Name == lanIPAddress {
-							sendDead(gameInstance.Me.Role)
+							sendDead(gameInstance.Me.Role, gonest.Reason_NORMAL)
 						}
 					}
 				} else {
@@ -542,7 +536,7 @@ func voteHandler(event *gonest.Event) {
 		} else {
 			if gameInstance.Me.PlayerProps.Name == player.Name {
 				gamemaster.Warn("You are dead")
-				sendDead(gameInstance.Me.Role)
+				sendDead(gameInstance.Me.Role, gonest.Reason_NORMAL)
 			} else {
 				gamemaster.Info(player.Name, "is dead.")
 			}
@@ -667,8 +661,8 @@ func sendACK() {
 	eventPropagator(event, right)
 }
 
-func sendDead(role gonest.Role) {
-	event := gonest.DeadMessageFactory(lanIPAddress, role)
+func sendDead(role gonest.Role, reason gonest.Reason) {
+	event := gonest.DeadMessageFactory(lanIPAddress, role, reason)
 	eventPropagator(event, right)
 }
 

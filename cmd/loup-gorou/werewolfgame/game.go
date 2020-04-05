@@ -19,14 +19,25 @@ type Player struct {
 	Alive bool
 }
 
-type CurrentPlayer struct {
-	PlayerProps *Player
-	Role        gonest.Role
-}
-
 type DeadPlayer struct {
 	PlayerProps *Player
 	Role        gonest.Role
+}
+type CurrentPlayer struct {
+	PlayerProps  *Player
+	Role         gonest.Role
+	roleContexts map[string]interface{}
+}
+
+func NewCurrentPlayer(name string, role gonest.Role) CurrentPlayer {
+	return CurrentPlayer{
+		PlayerProps: &Player{
+			Name:  name,
+			Alive: true,
+		},
+		Role:         role,
+		roleContexts: make(map[string]interface{}),
+	}
 }
 
 //CanVote
@@ -41,6 +52,14 @@ func (c *CurrentPlayer) AmIDead() bool {
 	} else {
 		return false
 	}
+}
+func (c *CurrentPlayer) SetContext(key string, context interface{}) {
+	c.roleContexts[key] = context
+}
+
+func (c *CurrentPlayer) GetContext(key string) (context interface{}, ok bool) {
+	context, ok = c.roleContexts[key]
+	return
 }
 
 type Game struct {
