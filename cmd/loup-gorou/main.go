@@ -36,7 +36,7 @@ const (
 	LEADER_ELECTED_TRANSITION  = "LEADER_ELECTED_TRANSITION"  //leaderelected transition is the transition uses to go to the ROLEDISTRIBUTION_STATE from the LEADERELECTION_STATE.
 	ROLE_DISTRIBUED_TRANSITION = "ROLE_DISTRIBUED_TRANSITION" //roledistributed transition is the transition uses to go to the GAME_STATE from the ROLEDISTRIBUTION_STATE.
 
-	TIME_BEFORE_TIMEOUT_MATCHMAKING_SEC = 30
+	TIME_BEFORE_TIMEOUT_MATCHMAKING_SEC = 10
 )
 
 var (
@@ -46,7 +46,7 @@ var (
 	lanIPAddress        string                                          //contains our ip address with the tcp server port
 	rightMutex          *sync.Mutex                = &sync.Mutex{}      //mutex to protect the right connection
 	listIPAddress                                  = make([]string, 10) //contains every ip address of the players in the ring.
-	minPlayer                                      = 3                  // the value is set at 2 for test
+	minPlayer                                      = 2                  // the value is set at 2 for test
 	ackMap              map[string]int                                  //in key we have the ip addresses of the players and the value is the result is if they acquit the state.
 	timerEndPreparation *secondstimer.SecondsTimer                      //timer start when we have the minimum number of player in the ring, when the timer is finished, the game start. (the time will be redifined in the future).
 	leader              string                                          //contains the leader ip address
@@ -104,6 +104,33 @@ func promptUser() {
 						gamemaster.Error("You are not allowed to vote right now")
 					}
 
+				} else if len(text) > 6 && text[1:5] == "love" {
+					target := text[6:]
+
+					//check the ip address validity
+					if _, ok := gameInstance.AlivePlayers[target]; !ok {
+						gamemaster.Error("Invalid target")
+						continue
+					}
+					if gameInstance.Me.Role == gonest.Role_CUPIDROLE && gameInstance.FSM.Is(werewolfgame.CUPID_PREPARATION_STATE) {
+						context, _ := gameInstance.Me.GetCupidContext()
+						if context.HasSentAllArrows() { // GUARD
+							return
+						}
+						res := context.MarkArrowAsSent(target)
+						if !res {
+							gamemaster.Error("You can send two arrows to the same person, that would be weird !")
+						}
+						if context.HasSentAllArrows() {
+							target1, target2, _ := context.GetArrows()
+							gamemaster.Infof("You fire your arrows to %s & %s", target1, target2)
+							sendLove(target1, target2)
+						} else {
+							gamemaster.Info("Okay, choose another person with !love")
+						}
+					} else {
+						gamemaster.Error("You are not allowed to make love right now")
+					}
 				}
 			} else {
 				if gameInstance.FSM.Is(werewolfgame.DAY_VOTE_STATE) {
@@ -118,7 +145,7 @@ func promptUser() {
 //initialisation of the different Callback
 func init() {
 	log.SetFormatter(&prefixed.TextFormatter{})
-	log.SetLevel(log.TraceLevel)
+	log.SetLevel(log.InfoLevel)
 	gamemaster = log.WithField("prefix", "GAMEMASTER")
 	// load .env file
 	err := godotenv.Load()
@@ -165,6 +192,9 @@ func init() {
 }
 
 func main() {
+	log.Infof("Loup Gorou CUPID EDITION v%s", "0.0.4")
+	log.Info("You can set the log level @ line 148 in main.go. TraceLevel available to show all packets")
+	log.Infof("NEED %d players to be connected before start", minPlayer)
 	//Initialisation of the tcp server.
 	server := tcp_server.New(fmt.Sprintf("%s:%s",
 		os.Getenv("GOROU_BIND_ADDRESS"),
@@ -231,6 +261,8 @@ func broadcastInProgress(c *tcp_server.Client, message string, event *gonest.Eve
 		voteHandler(event)
 	case gonest.MessageType_DEAD:
 		deadHandler(event)
+	case gonest.MessageType_CUPID:
+		loveHandler(event)
 	}
 }
 
@@ -260,6 +292,8 @@ func broadcastDone(message string, event *gonest.Event) {
 		chatHandler(event)
 	case gonest.MessageType_DEAD:
 		deadHandler(event)
+	case gonest.MessageType_CUPID:
+		loveHandler(event)
 	}
 }
 
@@ -349,7 +383,7 @@ func timerFunction() {
 }
 
 func initGame(role gonest.Role) {
-	gamemaster.Warn("You have the role ", role.String())
+	gamemaster.Info("You have the role ", role.String())
 	gameInstance = werewolfgame.NewGame(werewolfgame.NewCurrentPlayer(lanIPAddress, role),
 		listIPAddress,
 		fsm.Callbacks{
@@ -363,8 +397,21 @@ func initGame(role gonest.Role) {
 			"enter_state": func(e *fsm.Event) {
 				log.WithField("prefix", "GAME FSM").Debug("Entering state ", e.Dst)
 			},
+			"enter_" + werewolfgame.CUPID_PREPARATION_STATE: func(e *fsm.Event) {
+
+				if _, _, cupid := werewolfgame.GetRoleDistribution(len(gameInstance.AlivePlayers)); cupid == 0 {
+					go func() {
+						gameInstance.FSM.Event(werewolfgame.CUPID_END_TRANSITION)
+					}()
+				} else {
+					gamemaster.Info("Cupid wakes up.")
+					if gameInstance.Me.Role == gonest.Role_CUPIDROLE {
+						gamemaster.Info("You are cupid. Point with your finger the new lovers. Use the command !love [ipaddress]")
+					}
+				}
+			},
 			"enter_" + werewolfgame.NIGHT_WEREWOLF_PLAYING_STATE: func(e *fsm.Event) {
-				ended := checkVictoryStateHandler(e)
+				ended := checkVictoryStateHandler()
 				if !ended {
 					gamemaster.Info("The night comes on Thiercelieux ...")
 					gamemaster.Info("The werewolves wake up")
@@ -382,6 +429,10 @@ func initGame(role gonest.Role) {
 						gamemaster.Println("\t\t-", player.Name)
 						if player.Name == lanIPAddress {
 							sendDead(gameInstance.Me.Role, gonest.Reason_NORMAL)
+						} else if gameInstance.Me.IsInLoveWith(player.Name) {
+							sendDead(gameInstance.Me.Role, gonest.Reason_CUPID_LOVER)
+							gameInstance.KillPlayer(gameInstance.Me.PlayerProps)
+							gamemaster.Warnf("You are dead because you were in love with %s", player.Name)
 						}
 					}
 				} else {
@@ -389,9 +440,27 @@ func initGame(role gonest.Role) {
 				}
 			},
 			"enter_" + werewolfgame.DAY_VOTE_STATE: func(e *fsm.Event) {
-				checkVictoryStateHandler(e)
+				ended := checkVictoryStateHandler()
+				if !ended && gameInstance.Me.CanVote() {
+					gamemaster.Info("You can now tchat")
+					gamemaster.Info("You are now allowed to vote. Vote with !vote [ipaddress]")
+
+				}
+			},
+			"enter_" + werewolfgame.ENDOFGAME_STATE: func(e *fsm.Event) {
+				log.Info("The end.")
+				go func() {
+					time.Sleep(time.Second * 2)
+					os.Exit(0)
+				}()
 			},
 		})
+	if role == gonest.Role_CUPIDROLE {
+		err := gameInstance.Me.InitCupidContext()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	_ = fsmConnection.Event(ROLE_DISTRIBUED_TRANSITION)
 }
 
@@ -420,21 +489,39 @@ func isEverybodyOk() (result bool) {
 	return
 }
 
-func checkVictoryStateHandler(e *fsm.Event) bool {
-	funcToexec := func() {
-		time.Sleep(time.Second * 3)
-		os.Exit(0)
+func checkVictoryStateHandler() bool {
+	transition := werewolfgame.END_OF_GAME_AFTER_NIGHT_TRANSITION
+	if gameInstance.FSM.Is(werewolfgame.NIGHT_WEREWOLF_PLAYING_STATE) {
+		transition = werewolfgame.END_OF_GAME_AFTER_VOTE_TRANSITION
+	}
+	if len(gameInstance.AlivePlayers) == 0 {
+		gamemaster.Info("That's a drawn. Oh no....")
+		go func() {
+			if transition == werewolfgame.END_OF_GAME_AFTER_VOTE_TRANSITION {
+				gameInstance.FSM.SetState(werewolfgame.DAY_VOTE_STATE)
+			}
+			gameInstance.FSM.Event(transition)
+		}()
+		return true
 	}
 	if gameInstance.WerewolfWon() {
 		gamemaster.Info("Werewolfs won")
-		go funcToexec()
-		gameInstance.FSM.SetState(werewolfgame.ENDOFGAME_STATE)
+		go func() {
+			if transition == werewolfgame.END_OF_GAME_AFTER_VOTE_TRANSITION {
+				gameInstance.FSM.SetState(werewolfgame.DAY_VOTE_STATE)
+			}
+			gameInstance.FSM.Event(transition)
+		}()
 		return true
 
 	} else if gameInstance.HumansWon() {
 		gamemaster.Info("Humans won")
-		go funcToexec()
-		gameInstance.FSM.SetState(werewolfgame.ENDOFGAME_STATE)
+		go func() {
+			if transition == werewolfgame.END_OF_GAME_AFTER_VOTE_TRANSITION {
+				gameInstance.FSM.SetState(werewolfgame.DAY_VOTE_STATE)
+			}
+			gameInstance.FSM.Event(transition)
+		}()
 		return true
 	}
 	return false
@@ -485,6 +572,10 @@ func deadHandler(event *gonest.Event) {
 	deadMessage := event.GetDeadMessage()
 	gameInstance.ConfirmDeath(event.GetSource(), deadMessage.GetRole())
 	gamemaster.Warnf("%s was %s", event.GetSource(), deadMessage.GetRole())
+	if deadMessage.GetReason() == gonest.Reason_CUPID_LOVER {
+		gamemaster.Warn("He died because he was in love with someone... That's a murder of love !")
+		gameInstance.KillPlayer(gameInstance.Players[event.GetSource()])
+	}
 
 }
 
@@ -534,9 +625,14 @@ func voteHandler(event *gonest.Event) {
 		if gameInstance.FSM.Is(werewolfgame.NIGHT_WEREWOLF_PLAYING_STATE) {
 			_ = gameInstance.FSM.Event(werewolfgame.WEREWOLF_VOTE_END_TRANSITION)
 		} else {
+			gamemaster.Infof("The verdict is for %s", player.Name)
 			if gameInstance.Me.PlayerProps.Name == player.Name {
 				gamemaster.Warn("You are dead")
 				sendDead(gameInstance.Me.Role, gonest.Reason_NORMAL)
+			} else if gameInstance.Me.IsInLoveWith(player.Name) {
+				gamemaster.Warnf("You are dead because you were in love with %s", player.Name)
+				gameInstance.KillPlayer(gameInstance.Me.PlayerProps)
+				sendDead(gameInstance.Me.Role, gonest.Reason_CUPID_LOVER)
 			} else {
 				gamemaster.Info(player.Name, "is dead.")
 			}
@@ -634,6 +730,24 @@ func leaderElectionHandler(event *gonest.Event) {
 	log.Info("Leader elected is ", leader, ", now awaiting from him to get my role !")
 }
 
+func loveHandler(event *gonest.Event) {
+	if event.GetSource() != lanIPAddress {
+		go eventPropagator(event, right)
+	}
+	contentMessage := event.GetCupidMessage()
+	target1 := contentMessage.GetIpAddress1()
+	target2 := contentMessage.GetIpAddress2()
+	if target1 == lanIPAddress {
+		gameInstance.Me.FallInLoveWith(target2)
+		gamemaster.Infof("You fell in love with %s", target2)
+	}
+	if target2 == lanIPAddress {
+		gameInstance.Me.FallInLoveWith(target1)
+		gamemaster.Infof("You fell in love with %s", target1)
+	}
+	gameInstance.FSM.Event(werewolfgame.CUPID_END_TRANSITION)
+}
+
 // MESSAGE CREATION AND SEND
 func eventPropagator(event *gonest.Event, right net.Conn) {
 	encoded, _ := frame.EncodeEventB64(event)
@@ -668,6 +782,11 @@ func sendDead(role gonest.Role, reason gonest.Reason) {
 
 func sendVote(target string) {
 	event := gonest.VoteMessageFactory(lanIPAddress, target)
+	eventPropagator(event, right)
+}
+
+func sendLove(target1 string, target2 string) {
+	event := gonest.CupidMessageFactory(lanIPAddress, target1, target2)
 	eventPropagator(event, right)
 }
 

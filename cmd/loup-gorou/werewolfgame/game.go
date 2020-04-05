@@ -43,7 +43,7 @@ func NewCurrentPlayer(name string, role gonest.Role) CurrentPlayer {
 //CanVote
 //test if the current player is able to vote given the actual state
 func (c *CurrentPlayer) CanVote() bool {
-	return (c.PlayerProps.g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) && c.Role == gonest.Role_WEREWOLFROLE) || c.PlayerProps.g.FSM.Is(DAY_VOTE_STATE)
+	return ((c.PlayerProps.g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) && c.Role == gonest.Role_WEREWOLFROLE) || c.PlayerProps.g.FSM.Is(DAY_VOTE_STATE) && !c.AmIDead())
 }
 
 func (c *CurrentPlayer) AmIDead() bool {
@@ -124,13 +124,12 @@ func NewGame(me CurrentPlayer, playersNames []string, callbacks fsm.Callbacks) *
 
 		INITIAL_STATE,
 		fsm.Events{
-			{Name: START_TRANSITION, Src: []string{INITIAL_STATE}, Dst: NIGHT_WEREWOLF_PLAYING_STATE},
+			{Name: START_TRANSITION, Src: []string{INITIAL_STATE}, Dst: CUPID_PREPARATION_STATE},
+			{Name: CUPID_END_TRANSITION, Src: []string{CUPID_PREPARATION_STATE}, Dst: NIGHT_WEREWOLF_PLAYING_STATE},
 			{Name: WEREWOLF_VOTE_END_TRANSITION, Src: []string{NIGHT_WEREWOLF_PLAYING_STATE}, Dst: DAY_VOTE_STATE},
 			{Name: END_OF_DAY_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: NIGHT_WEREWOLF_PLAYING_STATE},
-			{Name: ALLWEREWOLF_KILLED_DURING_VOTE_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
-			{Name: ALLHUMAN_KILLED_DURING_VOTE_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
-			{Name: ALLWEREWOLF_KILLED_DURING_NIGHT_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
-			{Name: ALLHUMAN_KILLED_DURING_NIGHT_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
+			{Name: END_OF_GAME_AFTER_VOTE_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
+			{Name: END_OF_GAME_AFTER_NIGHT_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
 		},
 		callbacks,
 	)
@@ -160,7 +159,7 @@ func (g *Game) ConfirmDeath(playerName string, role gonest.Role) {
 
 func (g *Game) DoesEveryoneVoted() bool {
 	if g.FSM.Is(DAY_VOTE_STATE) {
-		return len(g.AlivePlayers) == len(g.votes)
+		return len(g.votes) >= len(g.AlivePlayers)
 	} else if g.FSM.Is(NIGHT_WEREWOLF_PLAYING_STATE) {
 		return len(g.votes) == g.NumberOfAliveWerewolfs()
 	} else {
@@ -286,7 +285,7 @@ func (g *Game) NumberOfVotes() int {
 }
 
 func (g *Game) NumberOfAliveWerewolfs() int {
-	werewolfes, _ := GetRoleDistribution(len(g.Players))
+	werewolfes, _, _ := GetRoleDistribution(len(g.Players))
 	for _, deadPlayer := range g.DeadPlayers {
 		if deadPlayer.Role == gonest.Role_WEREWOLFROLE {
 			werewolfes -= 1
@@ -334,26 +333,33 @@ func (c *Player) Vote(name string) error {
 
 func ShuffleRoles(playerCount int) []gonest.Role {
 	roles := make([]gonest.Role, 0, playerCount)
-	werewolves, villagers := GetRoleDistribution(playerCount)
+	werewolves, villagers, cupid := GetRoleDistribution(playerCount)
 	for i := 0; i < werewolves; i += 1 {
 		roles = append(roles, gonest.Role_WEREWOLFROLE)
 	}
 	for i := 0; i < villagers; i += 1 {
 		roles = append(roles, gonest.Role_HUMANROLE)
 	}
+	if cupid > 0 {
+		roles = append(roles, gonest.Role_CUPIDROLE)
+	}
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(roles), func(i, j int) { roles[i], roles[j] = roles[j], roles[i] })
 	return roles
 }
 
-func GetRoleDistribution(playerCount int) (int, int) {
+func GetRoleDistribution(playerCount int) (int, int, int) {
+	cupid := 0
+	if playerCount > 2 {
+		cupid = 1
+	}
 	if playerCount <= 8 {
-		return 1, playerCount - 1
+		return 1, playerCount - 1 - cupid, cupid
 	} else if playerCount <= 11 {
-		return 2, playerCount - 2
+		return 2, playerCount - 2 - cupid, cupid
 	} else if playerCount <= 17 {
-		return 3, playerCount - 3
+		return 3, playerCount - 3 - cupid, cupid
 	} else {
-		return 4, playerCount - 4
+		return 4, playerCount - 4 - cupid, cupid
 	}
 }
