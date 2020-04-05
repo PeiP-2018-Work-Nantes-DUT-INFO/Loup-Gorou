@@ -7,7 +7,6 @@ import (
 	"loupgorou/cmd/loup-gorou/gonest"
 	"loupgorou/cmd/loup-gorou/secondstimer"
 	"loupgorou/cmd/loup-gorou/werewolfgame"
-	"loupgorou/versioninfo"
 	"net"
 	"os"
 	"sort"
@@ -193,7 +192,7 @@ func init() {
 }
 
 func main() {
-	log.Infof("%s v%s\nREV %s branch %s", versioninfo.ProjectName, versioninfo.Version, versioninfo.Revision, versioninfo.Branch)
+	log.Infof("%s v%s\nREV %s branch %s", "loup-gorou", "0.0.4-CUPID-EDITION", "3", "cupid-simons")
 	log.Info("You can set the log level @ line 148 in main.go. TraceLevel available to show all packets")
 	log.Infof("NEED %d players to be connected before start", minPlayer)
 	//Initialisation of the tcp server.
