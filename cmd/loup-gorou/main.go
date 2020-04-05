@@ -100,6 +100,9 @@ func promptUser() {
 					}
 					if gameInstance.Me.CanVote() {
 						sendVote(target)
+					} else if gameInstance.Me.Role == gonest.Role_CLAIRVOYANTROLE && !gameInstance.Me.AmIDead() && gameInstance.FSM.Is(werewolfgame.NIGHT_CLAIRVOYANT_PLAYING_STATE) {
+						sendClairvoyant(target)
+						gameInstance.FSM.Event(werewolfgame.CLAIRVOYANT_PLAYED_TRANSITION)
 					} else {
 						gamemaster.Error("You are not allowed to vote right now")
 					}
@@ -231,6 +234,8 @@ func broadcastInProgress(c *tcp_server.Client, message string, event *gonest.Eve
 		voteHandler(event)
 	case gonest.MessageType_DEAD:
 		deadHandler(event)
+	case gonest.MessageType_CLAIRVOYANT:
+		clairvoyantHandler(event)
 	}
 }
 
@@ -260,6 +265,12 @@ func broadcastDone(message string, event *gonest.Event) {
 		chatHandler(event)
 	case gonest.MessageType_DEAD:
 		deadHandler(event)
+	case gonest.MessageType_CLAIRVOYANT:
+		go sendACK()
+		if !gameInstance.Me.AmIDead() {
+			clairvoyantPart := event.GetClairvoyantMessage()
+			gamemaster.Warnf("%s has the role %s.", clairvoyantPart.GetTarget(), clairvoyantPart.GetRole())
+		}
 	}
 }
 
@@ -350,7 +361,13 @@ func timerFunction() {
 
 func initGame(role gonest.Role) {
 	gamemaster.Warn("You have the role ", role.String())
-	gameInstance = werewolfgame.NewGame(werewolfgame.NewCurrentPlayer(lanIPAddress, role),
+	gameInstance = werewolfgame.NewGame(werewolfgame.CurrentPlayer{
+		PlayerProps: &werewolfgame.Player{
+			Name:  lanIPAddress,
+			Alive: true,
+		},
+		Role: role,
+	},
 		listIPAddress,
 		fsm.Callbacks{
 			"leave_state": func(e *fsm.Event) {
@@ -366,7 +383,6 @@ func initGame(role gonest.Role) {
 			"enter_" + werewolfgame.NIGHT_WEREWOLF_PLAYING_STATE: func(e *fsm.Event) {
 				ended := checkVictoryStateHandler(e)
 				if !ended {
-					gamemaster.Info("The night comes on Thiercelieux ...")
 					gamemaster.Info("The werewolves wake up")
 					if gameInstance.Me.Role == gonest.Role_WEREWOLFROLE {
 						gamemaster.Info("You are a werewolf. Vote with !vote [ipaddress]")
@@ -390,6 +406,18 @@ func initGame(role gonest.Role) {
 			},
 			"enter_" + werewolfgame.DAY_VOTE_STATE: func(e *fsm.Event) {
 				checkVictoryStateHandler(e)
+			},
+			"enter_" + werewolfgame.NIGHT_CLAIRVOYANT_PLAYING_STATE: func(e *fsm.Event) {
+				checkVictoryStateHandler(e)
+				gamemaster.Info("The night comes on Thiercelieux ...")
+				gamemaster.Info("It's clairvoyant turn !")
+				if gameInstance.Me.Role == gonest.Role_CLAIRVOYANTROLE && !gameInstance.Me.AmIDead() {
+					if !gameInstance.Me.AmIDead() {
+						gamemaster.Warn("It's your turn (clairvoyant) ! You can choose your target with !vote [ipaddress] !")
+					} else {
+						sendClairvoyant(lanIPAddress)
+					}
+				}
 			},
 		})
 	_ = fsmConnection.Event(ROLE_DISTRIBUED_TRANSITION)
@@ -538,7 +566,7 @@ func voteHandler(event *gonest.Event) {
 				gamemaster.Warn("You are dead")
 				sendDead(gameInstance.Me.Role, gonest.Reason_NORMAL)
 			} else {
-				gamemaster.Info(player.Name, "is dead.")
+				gamemaster.Info(player.Name, " is dead.")
 			}
 			_ = gameInstance.FSM.Event(werewolfgame.END_OF_DAY_TRANSITION)
 		}
@@ -614,6 +642,15 @@ func ackHandler(event *gonest.Event) {
 
 }
 
+func clairvoyantHandler(event *gonest.Event) {
+	clairvoyantPart := event.GetClairvoyantMessage()
+	if clairvoyantPart.GetTarget() == lanIPAddress {
+		clairvoyantPart.Role = gameInstance.Me.Role
+	}
+	go eventPropagator(event, right)
+	gameInstance.FSM.Event(werewolfgame.CLAIRVOYANT_PLAYED_TRANSITION)
+}
+
 func chatHandler(event *gonest.Event) {
 	if event.GetSource() != lanIPAddress {
 		go eventPropagator(event, right)
@@ -658,6 +695,11 @@ func sendACK() {
 		initAckMap()
 	}
 	event := gonest.AckMessageFactory(lanIPAddress)
+	eventPropagator(event, right)
+}
+
+func sendClairvoyant(target string) {
+	event := gonest.ClairvoyantMessageFactory(lanIPAddress, target)
 	eventPropagator(event, right)
 }
 

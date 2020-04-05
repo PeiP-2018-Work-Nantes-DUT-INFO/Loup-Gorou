@@ -11,7 +11,7 @@ import (
 )
 
 // This channel is used to know when a new vote is made, an restart the timeout.
-//var voteChannel chan bool = make(chan bool)
+var voteChannel chan bool = make(chan bool)
 
 type Player struct {
 	Name  string
@@ -19,25 +19,14 @@ type Player struct {
 	Alive bool
 }
 
-type DeadPlayer struct {
+type CurrentPlayer struct {
 	PlayerProps *Player
 	Role        gonest.Role
 }
-type CurrentPlayer struct {
-	PlayerProps  *Player
-	Role         gonest.Role
-	roleContexts map[string]interface{}
-}
 
-func NewCurrentPlayer(name string, role gonest.Role) CurrentPlayer {
-	return CurrentPlayer{
-		PlayerProps: &Player{
-			Name:  name,
-			Alive: true,
-		},
-		Role:         role,
-		roleContexts: make(map[string]interface{}),
-	}
+type DeadPlayer struct {
+	PlayerProps *Player
+	Role        gonest.Role
 }
 
 //CanVote
@@ -47,20 +36,11 @@ func (c *CurrentPlayer) CanVote() bool {
 }
 
 func (c *CurrentPlayer) AmIDead() bool {
-	if _, ok := c.PlayerProps.g.DeadPlayers[c.PlayerProps.Name]; ok {
+	if _, ok := c.PlayerProps.g.DeadPlayers[c.PlayerProps.Name]; ok != false {
 		return true
 	} else {
 		return false
 	}
-}
-
-func (c *CurrentPlayer) SetContext(key string, context interface{}) {
-	c.roleContexts[key] = context
-}
-
-func (c *CurrentPlayer) GetContext(key string) (context interface{}, ok bool) {
-	context, ok = c.roleContexts[key]
-	return
 }
 
 type Game struct {
@@ -124,9 +104,10 @@ func NewGame(me CurrentPlayer, playersNames []string, callbacks fsm.Callbacks) *
 
 		INITIAL_STATE,
 		fsm.Events{
-			{Name: START_TRANSITION, Src: []string{INITIAL_STATE}, Dst: NIGHT_WEREWOLF_PLAYING_STATE},
+			{Name: START_TRANSITION, Src: []string{INITIAL_STATE}, Dst: NIGHT_CLAIRVOYANT_PLAYING_STATE},
+			{Name: CLAIRVOYANT_PLAYED_TRANSITION, Src: []string{NIGHT_CLAIRVOYANT_PLAYING_STATE}, Dst: NIGHT_WEREWOLF_PLAYING_STATE},
 			{Name: WEREWOLF_VOTE_END_TRANSITION, Src: []string{NIGHT_WEREWOLF_PLAYING_STATE}, Dst: DAY_VOTE_STATE},
-			{Name: END_OF_DAY_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: NIGHT_WEREWOLF_PLAYING_STATE},
+			{Name: END_OF_DAY_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: NIGHT_CLAIRVOYANT_PLAYING_STATE},
 			{Name: ALLWEREWOLF_KILLED_DURING_VOTE_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
 			{Name: ALLHUMAN_KILLED_DURING_VOTE_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
 			{Name: ALLWEREWOLF_KILLED_DURING_NIGHT_TRANSITION, Src: []string{DAY_VOTE_STATE}, Dst: ENDOFGAME_STATE},
@@ -286,7 +267,7 @@ func (g *Game) NumberOfVotes() int {
 }
 
 func (g *Game) NumberOfAliveWerewolfs() int {
-	werewolfes, _ := GetRoleDistribution(len(g.Players))
+	werewolfes, _, _ := GetRoleDistribution(len(g.Players))
 	for _, deadPlayer := range g.DeadPlayers {
 		if deadPlayer.Role == gonest.Role_WEREWOLFROLE {
 			werewolfes -= 1
@@ -334,26 +315,29 @@ func (c *Player) Vote(name string) error {
 
 func ShuffleRoles(playerCount int) []gonest.Role {
 	roles := make([]gonest.Role, 0, playerCount)
-	werewolves, villagers := GetRoleDistribution(playerCount)
+	werewolves, villagers, clairvoyant := GetRoleDistribution(playerCount)
 	for i := 0; i < werewolves; i += 1 {
 		roles = append(roles, gonest.Role_WEREWOLFROLE)
 	}
 	for i := 0; i < villagers; i += 1 {
 		roles = append(roles, gonest.Role_HUMANROLE)
 	}
+	for i := 0; i < clairvoyant; i += 1 {
+		roles = append(roles, gonest.Role_CLAIRVOYANTROLE)
+	}
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(roles), func(i, j int) { roles[i], roles[j] = roles[j], roles[i] })
 	return roles
 }
 
-func GetRoleDistribution(playerCount int) (int, int) {
+func GetRoleDistribution(playerCount int) (int, int, int) {
 	if playerCount <= 8 {
-		return 1, playerCount - 1
+		return 1, playerCount - 2, 1
 	} else if playerCount <= 11 {
-		return 2, playerCount - 2
+		return 2, playerCount - 3, 1
 	} else if playerCount <= 17 {
-		return 3, playerCount - 3
+		return 3, playerCount - 4, 1
 	} else {
-		return 4, playerCount - 4
+		return 4, playerCount - 5, 1
 	}
 }
